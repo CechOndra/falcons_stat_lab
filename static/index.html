@@ -1,0 +1,897 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Falcons Stat Lab</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='13' font-size='13'>🦅</text></svg>">
+<style>
+:root{
+  --page:#f9f9f7; --surface:#fcfcfb; --ink:#0b0b0b; --ink2:#52514e; --muted:#898781;
+  --grid:#e1e0d9; --axis:#c3c2b7; --border:rgba(11,11,11,.10);
+  --us:#2a78d6; --opp:#e34948; --miss:#eda100; --goal:#008300; --block:#4a3aa7;
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --page:#0d0d0d; --surface:#1a1a19; --ink:#ffffff; --ink2:#c3c2b7; --muted:#898781;
+    --grid:#2c2c2a; --axis:#383835; --border:rgba(255,255,255,.10);
+    --us:#3987e5; --opp:#e66767; --miss:#c98500; --goal:#008300; --block:#9085e9;
+  }
+}
+*{box-sizing:border-box}
+[hidden]{display:none !important}
+body{margin:0;font:14px/1.45 system-ui,-apple-system,"Segoe UI",sans-serif;background:var(--page);color:var(--ink)}
+nav{display:flex;gap:4px;padding:8px 14px;border-bottom:1px solid var(--grid);background:var(--surface);position:sticky;top:0;z-index:5}
+nav button{background:none;border:0;padding:7px 12px;font:inherit;color:var(--ink2);cursor:pointer;border-radius:6px}
+nav button.on{background:var(--us);color:#fff}
+nav .brand{font-weight:700;margin-right:12px;align-self:center}
+main{padding:14px;max-width:1280px;margin:0 auto}
+section.tab{display:none} section.tab.on{display:block}
+h2{font-size:17px;margin:6px 0 10px} h3{font-size:14px;margin:8px 0 6px}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:12px}
+table{border-collapse:collapse;width:100%;font-variant-numeric:tabular-nums}
+th,td{text-align:left;padding:4px 8px;border-bottom:1px solid var(--grid);white-space:nowrap}
+th{color:var(--muted);font-weight:600;font-size:12px}
+.tblwrap{overflow-x:auto}
+input,select,textarea{font:inherit;color:var(--ink);background:var(--surface);border:1px solid var(--axis);border-radius:6px;padding:5px 7px}
+input.num{width:56px}
+button{font:inherit;cursor:pointer;border-radius:6px;border:1px solid var(--axis);background:var(--surface);color:var(--ink);padding:5px 10px}
+button.pri{background:var(--us);border-color:var(--us);color:#fff}
+button.ghost{border:0;background:none;color:var(--ink2);padding:2px 6px}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:6px 0}
+.hint{color:var(--muted);font-size:12px}
+kbd{background:var(--grid);border-radius:4px;padding:1px 5px;font-size:12px;font-family:inherit}
+dialog{background:var(--surface);color:var(--ink);border:1px solid var(--border);border-radius:12px;padding:16px;max-width:640px}
+dialog::backdrop{background:rgba(0,0,0,.45)}
+.chips{display:flex;gap:6px;flex-wrap:wrap;min-height:30px}
+.chip{background:var(--grid);border-radius:14px;padding:3px 10px;font-weight:600}
+.grid2{display:grid;grid-template-columns:1fr 340px;gap:12px}
+@media(max-width:900px){.grid2{grid-template-columns:1fr}}
+video{width:100%;max-height:56vh;background:#000;border-radius:8px}
+.clock{font-size:30px;font-weight:700}
+.clock small{font-size:14px;color:var(--muted);font-weight:400}
+.stopped{color:var(--opp)}
+#evlog{max-height:44vh;overflow-y:auto}
+#evlog tr{cursor:pointer} #evlog tr:hover{background:var(--grid)}
+#evlog td:nth-child(2){white-space:normal}
+.tiles{display:flex;gap:10px;flex-wrap:wrap}
+.tile{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:10px 16px;min-width:104px}
+.tile b{display:block;font-size:24px;font-weight:700}
+.tile span{color:var(--muted);font-size:12px}
+.legend{display:flex;gap:14px;align-items:center;font-size:12px;color:var(--ink2);margin:6px 0}
+.dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:4px;vertical-align:-1px}
+.bars .brow{display:grid;grid-template-columns:34px 1fr 1fr;gap:8px;align-items:center;margin:4px 0}
+.bar{height:16px;border-radius:0 4px 4px 0;min-width:2px;display:inline-block;vertical-align:middle}
+.bnum{font-size:12px;margin-left:6px;color:var(--ink2)}
+svg text{fill:var(--muted);font-size:5px}
+.rink{width:100%;height:auto;display:block;background:var(--surface);border:1px solid var(--grid);border-radius:8px;cursor:crosshair}
+.filefiles .cur{font-weight:700;color:var(--us)}
+a{color:var(--us)}
+.err{color:var(--opp);font-size:12px}
+.ok{color:var(--goal)}
+</style>
+</head>
+<body>
+<nav>
+  <span class="brand">🦅 Falcons Stat Lab</span>
+  <button data-tab="games" class="on">Games</button>
+  <button data-tab="log">Log</button>
+  <button data-tab="dash">Dashboard</button>
+  <button data-tab="roster">Roster</button>
+  <button data-tab="setup">Setup</button>
+  <a href="/manual" target="_blank" style="align-self:center;margin-left:auto">Manual</a>
+</nav>
+<main>
+
+<!-- ======================= GAMES ======================= -->
+<section class="tab on" id="tab-games">
+  <div class="card">
+    <h2 id="gformTitle">New game</h2>
+    <div class="row">
+      <select id="gSeason"></select>
+      <select id="gOpp"></select>
+      <input id="gNewOpp" placeholder="…or new opponent name">
+      <input id="gDate" type="date">
+      <select id="gHome"><option value="1">Home</option><option value="0">Away</option></select>
+      <label>Period <input id="gPlen" class="num" type="number" value="20" min="1"> min</label>
+    </div>
+    <h3>Lineup (players dressed for this game)</h3>
+    <div id="gRoster" class="row"></div>
+    <div class="row"><button class="pri" id="gSave">Save game</button><button id="gCancel" hidden>Cancel edit</button></div>
+  </div>
+  <div class="card"><h2>Games</h2><div class="tblwrap"><table id="gamesTbl"></table></div></div>
+</section>
+
+<!-- ======================= LOG ======================= -->
+<section class="tab" id="tab-log">
+  <div id="noGame" class="card">Open a game from the <b>Games</b> tab first.</div>
+  <div id="logUI" hidden>
+  <div class="grid2">
+    <div>
+      <div class="card">
+        <div class="row">
+          <b id="lgTitle"></b>
+          <span id="lgScore"></span>
+          <label style="margin-left:auto"><input type="checkbox" id="optResume" checked> resume video after save</label>
+        </div>
+        <video id="video" controls preload="metadata"></video>
+        <div class="row filefiles">
+          <input type="file" id="vfiles" accept="video/*" multiple>
+          <span id="vlist"></span>
+        </div>
+        <div id="vprev" class="hint"></div>
+        <div class="hint">
+          <kbd>Space</kbd> play/pause · <kbd>←</kbd>/<kbd>→</kbd> ±5s (<kbd>Shift</kbd> ±1s) · <kbd>,</kbd>/<kbd>.</kbd> speed ·
+          <kbd>C</kbd> calibrate · <kbd>K</kbd> clock run/stop ·
+          <kbd>S</kbd>/<kbd>A</kbd> shot us/opp · <kbd>G</kbd>/<kbd>H</kbd> goal us/opp ·
+          <kbd>P</kbd>/<kbd>O</kbd> penalty us/opp · <kbd>L</kbd> line change · <kbd>U</kbd> state override
+        </div>
+      </div>
+    </div>
+    <div>
+      <div class="card">
+        <div class="clock"><span id="ckPeriod">P1</span> <span id="ckTime">--:--</span> <small id="ckState">not calibrated — press C</small></div>
+        <div class="hint">On ice: <span id="onIceNow">—</span></div>
+      </div>
+      <div class="card">
+        <h3>Event log</h3>
+        <div id="evlog" class="tblwrap"><table id="evTbl"></table></div>
+      </div>
+    </div>
+  </div>
+  </div>
+</section>
+
+<!-- ======================= DASHBOARD ======================= -->
+<section class="tab" id="tab-dash">
+  <div class="card">
+    <div class="row">
+      <select id="fSeason"><option value="0">All seasons</option></select>
+      <select id="fOpp"><option value="0">All opponents</option></select>
+      <select id="fGames" multiple size="3" title="Ctrl-click for multiple; none = all"></select>
+      <select id="fHome"><option value="-1">Home + away</option><option value="1">Home</option><option value="0">Away</option></select>
+      <select id="fState"><option value="">All states</option><option value="5v5">5v5</option><option value="pp">PP</option><option value="pk">PK</option></select>
+      <select id="fPeriod"><option value="0">All periods</option><option>1</option><option>2</option><option>3</option><option value="4">OT</option></select>
+      <button class="pri" id="fGo">Apply</button>
+    </div>
+    <div class="hint">State/period filters apply to shot &amp; goal counts and the maps. TOI and PP%/PK% always cover the whole selected games.</div>
+  </div>
+  <div class="tiles" id="tiles"></div>
+  <div class="card"><h3>Team <button class="ghost" data-csv="teamTbl">⬇ CSV</button></h3>
+    <div class="tblwrap"><table id="teamTbl"></table></div>
+    <h3>Shots on goal by period</h3>
+    <div class="legend"><span><span class="dot" style="background:var(--us)"></span>Falcons</span><span><span class="dot" style="background:var(--opp)"></span>Opponent</span></div>
+    <div class="bars" id="periodBars"></div>
+  </div>
+  <div class="card"><h3>Players <button class="ghost" data-csv="playersTbl">⬇ CSV</button></h3>
+    <div class="tblwrap"><table id="playersTbl"></table></div>
+  </div>
+  <div class="card"><h3>Shot map</h3>
+    <div class="row">
+      <select id="hTeam"><option value="us">Falcons shots</option><option value="opp">Opponent shots</option></select>
+      <select id="hPlayer"><option value="0">All players</option></select>
+      <select id="hResult"><option value="">All results</option><option value="goal">Goals</option><option value="on_goal">On goal</option><option value="missed">Missed</option><option value="blocked">Blocked</option></select>
+      <select id="hMode"><option value="dots">Dots</option><option value="density">Density</option></select>
+    </div>
+    <div class="legend" id="hLegend">
+      <span><span class="dot" style="background:var(--goal)"></span>Goal</span>
+      <span><span class="dot" style="background:var(--us)"></span>On goal</span>
+      <span><span class="dot" style="background:var(--miss)"></span>Missed</span>
+      <span><span class="dot" style="background:var(--block)"></span>Blocked</span>
+      <span class="hint">attacking → right · hover a dot for details</span>
+    </div>
+    <svg id="heatmap" class="rink" viewBox="0 0 200 85" style="cursor:default"></svg>
+    <h3>Goal-mouth placement <span class="hint">(shots with recorded net location, shooter's view)</span></h3>
+    <svg id="netmap" viewBox="-6 -6 84 60" style="max-width:340px;display:block;background:var(--surface);border:1px solid var(--grid);border-radius:8px"></svg>
+  </div>
+</section>
+
+<!-- ======================= ROSTER ======================= -->
+<section class="tab" id="tab-roster">
+  <div class="card"><h2>Roster</h2>
+    <div class="tblwrap"><table id="rosterTbl"></table></div>
+    <div class="row">
+      <input id="rNum" class="num" type="number" placeholder="#">
+      <input id="rName" placeholder="Name">
+      <select id="rPos"><option value="F">F</option><option value="D">D</option><option value="G">G</option></select>
+      <input id="rPhoto" placeholder="photo URL (optional)">
+      <button class="pri" id="rAdd">Add player</button>
+    </div>
+  </div>
+  <div class="card"><h3>CSV import</h3>
+    <div class="hint">Format: <code>number,name,position</code> — one player per line. Header row optional. Template: <code>seed/roster_template.csv</code> in the repo.</div>
+    <div class="row"><input type="file" id="rCsvFile" accept=".csv,text/csv"></div>
+    <textarea id="rCsv" rows="4" style="width:100%" placeholder="17,Jan Novák,F&#10;30,Petr Brankář,G"></textarea>
+    <div class="row"><button class="pri" id="rImport">Import</button><span id="rImpMsg"></span></div>
+  </div>
+</section>
+
+<!-- ======================= SETUP ======================= -->
+<section class="tab" id="tab-setup">
+  <div class="card"><h2>Seasons</h2><div id="seasonsList"></div>
+    <div class="row"><input id="sName" placeholder="e.g. 2025/26"><button class="pri" id="sAdd">Add season</button></div>
+  </div>
+  <div class="card"><h2>Teams (opponents)</h2><div id="teamsList"></div>
+    <div class="row"><input id="tName" placeholder="Team name"><button class="pri" id="tAdd">Add team</button></div>
+    <div class="hint">Seeded from <code>seed/teams_template.csv</code> — edit freely; the league site (univerzitnihokej.cz) is the source of truth for names.</div>
+  </div>
+  <div class="card"><h2>Keyboard shortcuts</h2>
+    <div class="hint">Defaults documented in the <a href="/manual" target="_blank">manual</a>. To change them, edit the <code>KEYS</code> map at the top of the script in <code>static/index.html</code>.</div>
+  </div>
+</section>
+</main>
+
+<!-- ======================= DIALOGS ======================= -->
+<dialog id="dlgCal">
+  <h3>Calibrate game clock</h3>
+  <div class="row">
+    <label>Period <select id="calPeriod"><option>1</option><option>2</option><option>3</option><option value="4">OT</option></select></label>
+    <label>Time remaining <input id="calTime" placeholder="mm:ss" size="6"></label>
+  </div>
+  <div class="hint">Read both off the in-video score graphic, then press Enter. Clock starts running.</div>
+  <div class="row"><button class="pri save" id="calSave">Set (Enter)</button></div>
+</dialog>
+
+<dialog id="dlgShot">
+  <h3 id="shTitle">Shot</h3>
+  <svg id="shotRink" class="rink" viewBox="0 0 200 85"></svg>
+  <div class="hint">Click the shot location — shooter always attacks the <b>right</b> net. <span id="shLocMsg" class="err">location required</span></div>
+  <div class="row" id="rowShooter">Shooter #<input id="shShooter" class="num" inputmode="numeric"><span id="shShooterName" class="hint"></span></div>
+  <div class="row">Result <select id="shResult">
+    <option value="on_goal">on goal (saved)</option><option value="missed">missed</option>
+    <option value="blocked">blocked</option><option value="goal">GOAL</option></select>
+  </div>
+  <div class="row" id="rowBlocker" hidden>Blocked by our #<input id="shBlocker" class="num" inputmode="numeric"><span id="shBlockerName" class="hint"></span></div>
+  <div id="rowGoal" hidden>
+    <div class="row" id="rowAssists">Assist #<input id="shA1" class="num" inputmode="numeric"><span id="shA1Name" class="hint"></span>
+      Assist 2 #<input id="shA2" class="num" inputmode="numeric"><span id="shA2Name" class="hint"></span></div>
+    <div class="row" id="rowScreen">Screen by #<input id="shScreen" class="num" inputmode="numeric"><span id="shScreenName" class="hint"></span></div>
+  </div>
+  <div class="row" id="rowNet">Net placement (optional):
+    <svg id="netpick" viewBox="-6 -6 84 60" width="180" style="background:var(--page);border:1px solid var(--grid);border-radius:6px;cursor:crosshair"></svg>
+    <button class="ghost" id="netClear">clear</button>
+  </div>
+  <div class="hint">Enter = next field / save · Esc = cancel · optional fields: just leave empty</div>
+  <div class="row"><button class="pri save" id="shSave">Save (Enter)</button></div>
+</dialog>
+
+<dialog id="dlgPen">
+  <h3 id="penTitle">Penalty</h3>
+  <div class="row" id="rowPenPlayer">Player #<input id="penPlayer" class="num" inputmode="numeric"><span id="penPlayerName" class="hint"></span></div>
+  <div class="row">Length <select id="penLen"><option value="2">2 min</option><option value="5">5 min</option><option value="10">10 min (misconduct)</option></select></div>
+  <div class="row" id="rowPenZone">Zone <select id="penZone"><option value="off">offensive</option><option value="neu">neutral</option><option value="def">defensive</option></select>
+    <span class="hint">type o / n / d</span></div>
+  <div class="row"><button class="pri save" id="penSave">Save (Enter)</button></div>
+</dialog>
+
+<dialog id="dlgLineup">
+  <h3>Players on ice</h3>
+  <div class="chips" id="luChips"></div>
+  <input id="luInput" inputmode="numeric" placeholder="jersey # + Enter toggles" autocomplete="off">
+  <div class="hint"><kbd>Enter</kbd> on empty field = save · type <kbd>c</kbd> + Enter = clear all · Esc = cancel</div>
+</dialog>
+
+<dialog id="dlgOvr">
+  <h3>Game-state override</h3>
+  <div class="row"><select id="ovrVal">
+    <option value="auto">auto (derive from penalties)</option>
+    <option value="5v5">force 5v5</option><option value="pp">force PP</option><option value="pk">force PK</option>
+  </select></div>
+  <div class="hint">Applies from the current game time until the next override.</div>
+  <div class="row"><button class="pri save" id="ovrSave">Save (Enter)</button></div>
+</dialog>
+
+<script>
+"use strict";
+/* ---- keyboard map: edit here to rebind (documented in /manual) ---- */
+const KEYS = {playPause:" ", calibrate:"c", clock:"k", shotUs:"s", shotOpp:"a",
+  goalUs:"g", goalOpp:"h", penUs:"p", penOpp:"o", lineup:"l", override:"u",
+  back:"ArrowLeft", fwd:"ArrowRight", slower:",", faster:"."};
+
+const $ = s=>document.querySelector(s), $$ = s=>[...document.querySelectorAll(s)];
+const api = async (p, method="GET", body)=>{
+  const r = await fetch("/api"+p,{method,headers:{"Content-Type":"application/json"},
+    body: body===undefined?undefined:JSON.stringify(body)});
+  if(!r.ok) throw new Error(await r.text());
+  return r.json();
+};
+const mmss = s=>`${Math.floor(s/60)}:${String(Math.floor(s%60)).padStart(2,"0")}`;
+const parseClock = t=>{const m=/^(\d{1,2}):([0-5]?\d)$/.exec(t.trim());return m?60*+m[1]+ +m[2]:null;};
+const esc = s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+
+let SEASONS=[], TEAMS=[], PLAYERS=[], GAMES=[];
+let G=null, EVS=[], cal=null, onIce=new Set(), editingId=null, editingGame=null;
+const PBYID = ()=>Object.fromEntries(PLAYERS.map(p=>[p.id,p]));
+const pname = id=>{const p=PBYID()[id];return p?`#${p.number} ${p.name}`:(id?`?${id}`:"");};
+const byNum = n=>{
+  const ids = G?new Set(JSON.parse(G.roster||"[]")):null;
+  return PLAYERS.find(p=>p.number==n && (!ids||ids.has(p.id)));
+};
+
+/* ================= tabs ================= */
+$$("nav button").forEach(b=>b.onclick=()=>{
+  $$("nav button").forEach(x=>x.classList.toggle("on",x===b));
+  $$("section.tab").forEach(s=>s.classList.toggle("on",s.id==="tab-"+b.dataset.tab));
+  if(b.dataset.tab==="dash") loadDash();
+});
+const showTab = name=>$$("nav button").find(b=>b.dataset.tab===name).click();
+
+/* ================= reference data ================= */
+async function loadRefs(){
+  [SEASONS,TEAMS,PLAYERS,GAMES] = await Promise.all(
+    ["/seasons","/teams","/players","/games"].map(p=>api(p)));
+  renderSetup(); renderRoster(); renderGameForm(); renderGames(); fillDashFilters();
+}
+
+/* ================= setup tab ================= */
+function renderSetup(){
+  $("#seasonsList").innerHTML = SEASONS.map(s=>
+    `<div class="row">${esc(s.name)} <button class="ghost" data-del-season="${s.id}">✕</button></div>`).join("");
+  $("#teamsList").innerHTML = TEAMS.map(t=>
+    `<div class="row">${esc(t.name)} <button class="ghost" data-del-team="${t.id}">✕</button></div>`).join("");
+  $$("[data-del-season]").forEach(b=>b.onclick=async()=>{await api("/seasons/"+b.dataset.delSeason,"DELETE");loadRefs();});
+  $$("[data-del-team]").forEach(b=>b.onclick=async()=>{await api("/teams/"+b.dataset.delTeam,"DELETE");loadRefs();});
+}
+$("#sAdd").onclick = async()=>{if($("#sName").value.trim()){await api("/seasons","POST",{name:$("#sName").value.trim()});$("#sName").value="";loadRefs();}};
+$("#tAdd").onclick = async()=>{if($("#tName").value.trim()){await api("/teams","POST",{name:$("#tName").value.trim()});$("#tName").value="";loadRefs();}};
+
+/* ================= roster tab ================= */
+function renderRoster(){
+  $("#rosterTbl").innerHTML = "<tr><th>#</th><th>Name</th><th>Pos</th><th>Photo</th><th>Active</th><th></th></tr>"+
+    PLAYERS.map(p=>`<tr>
+      <td><input class="num" type="number" value="${p.number??""}" data-pf="number" data-pid="${p.id}"></td>
+      <td><input value="${esc(p.name)}" data-pf="name" data-pid="${p.id}"></td>
+      <td><input size="2" value="${esc(p.position)}" data-pf="position" data-pid="${p.id}"></td>
+      <td><input value="${esc(p.photo)}" data-pf="photo" data-pid="${p.id}" placeholder="URL"></td>
+      <td><input type="checkbox" ${p.active?"checked":""} data-pf="active" data-pid="${p.id}"></td>
+      <td><button class="ghost" data-del-p="${p.id}">✕</button></td></tr>`).join("");
+  $$("[data-pf]").forEach(el=>el.onchange=async()=>{
+    const v = el.type==="checkbox"?(el.checked?1:0):el.value;
+    await api("/players/"+el.dataset.pid,"PUT",{[el.dataset.pf]:v});
+    PLAYERS = await api("/players");
+  });
+  $$("[data-del-p]").forEach(b=>b.onclick=async()=>{
+    if(confirm("Delete player? Their logged events keep the id."))
+      {await api("/players/"+b.dataset.delP,"DELETE");loadRefs();}});
+}
+$("#rAdd").onclick = async()=>{
+  if(!$("#rName").value.trim()) return;
+  await api("/players","POST",{number:+$("#rNum").value||null,name:$("#rName").value.trim(),
+    position:$("#rPos").value,photo:$("#rPhoto").value.trim()});
+  $("#rNum").value=$("#rName").value=$("#rPhoto").value="";
+  loadRefs();
+};
+$("#rCsvFile").onchange = async e=>{ if(e.target.files[0]) $("#rCsv").value = await e.target.files[0].text(); };
+$("#rImport").onclick = async()=>{
+  const r = await fetch("/api/roster_csv",{method:"POST",body:$("#rCsv").value});
+  const j = await r.json();
+  $("#rImpMsg").textContent = `imported ${j.imported} players`; $("#rImpMsg").className="ok";
+  loadRefs();
+};
+
+/* ================= games tab ================= */
+function renderGameForm(){
+  $("#gSeason").innerHTML = SEASONS.map(s=>`<option value="${s.id}">${esc(s.name)}</option>`).join("");
+  $("#gOpp").innerHTML = `<option value="">— opponent —</option>`+TEAMS.filter(t=>!/falcons/i.test(t.name))
+    .map(t=>`<option value="${t.id}">${esc(t.name)}</option>`).join("");
+  $("#gRoster").innerHTML = PLAYERS.filter(p=>p.active).map(p=>
+    `<label><input type="checkbox" checked data-gr="${p.id}"> ${p.number??"?"} ${esc(p.name)}</label>`).join("");
+}
+$("#gSave").onclick = async()=>{
+  let oppId = +$("#gOpp").value||null;
+  const newOpp = $("#gNewOpp").value.trim();
+  if(newOpp){ oppId = (await api("/teams","POST",{name:newOpp})).id; }
+  if(!oppId){ alert("Pick or type an opponent"); return; }
+  const roster = $$("[data-gr]").filter(c=>c.checked).map(c=>+c.dataset.gr);
+  const data = {season_id:+$("#gSeason").value||null, opponent_id:oppId, date:$("#gDate").value,
+    home:+$("#gHome").value, period_len:60*(+$("#gPlen").value||20), roster:JSON.stringify(roster)};
+  if(editingGame){ await api("/games/"+editingGame,"PUT",data); }
+  else { await api("/games","POST",data); }
+  editingGame=null; $("#gformTitle").textContent="New game"; $("#gCancel").hidden=true; $("#gNewOpp").value="";
+  loadRefs();
+};
+$("#gCancel").onclick = ()=>{editingGame=null;$("#gformTitle").textContent="New game";$("#gCancel").hidden=true;renderGameForm();};
+function renderGames(){
+  const tmap = Object.fromEntries(TEAMS.map(t=>[t.id,t.name]));
+  const smap = Object.fromEntries(SEASONS.map(s=>[s.id,s.name]));
+  $("#gamesTbl").innerHTML = "<tr><th>Date</th><th>Season</th><th>Opponent</th><th>H/A</th><th>Score</th><th></th></tr>"+
+    GAMES.slice().reverse().map(g=>`<tr>
+      <td>${esc(g.date)}</td><td>${esc(smap[g.season_id]??"")}</td><td>${esc(tmap[g.opponent_id]??"?")}</td>
+      <td>${g.home?"H":"A"}</td><td>${g.score_us}:${g.score_opp}</td>
+      <td><button class="pri" data-open="${g.id}">Open / log</button>
+          <button data-editg="${g.id}">Edit</button>
+          <button class="ghost" data-delg="${g.id}">✕</button></td></tr>`).join("");
+  $$("[data-open]").forEach(b=>b.onclick=()=>openGame(+b.dataset.open));
+  $$("[data-delg]").forEach(b=>b.onclick=async()=>{
+    if(confirm("Delete game AND all its events?")){
+      for(const e of await api("/events?game_id="+b.dataset.delg)) await api("/events/"+e.id,"DELETE");
+      await api("/games/"+b.dataset.delg,"DELETE"); if(G&&G.id==+b.dataset.delg){G=null;$("#logUI").hidden=true;$("#noGame").hidden=false;}
+      loadRefs();}});
+  $$("[data-editg]").forEach(b=>b.onclick=()=>{
+    const g = GAMES.find(x=>x.id==+b.dataset.editg); editingGame=g.id;
+    $("#gformTitle").textContent="Edit game"; $("#gCancel").hidden=false;
+    $("#gSeason").value=g.season_id; $("#gOpp").value=g.opponent_id; $("#gDate").value=g.date;
+    $("#gHome").value=g.home; $("#gPlen").value=(g.period_len||1200)/60;
+    const ids = new Set(JSON.parse(g.roster||"[]"));
+    $$("[data-gr]").forEach(c=>c.checked=ids.has(+c.dataset.gr));
+    window.scrollTo(0,0);
+  });
+}
+
+/* ================= log tab: video + files ================= */
+const video = $("#video");
+let vURLs=[], vNames=[], vPeriods=[], curIdx=0;
+$("#vfiles").onchange = e=>{
+  vURLs.forEach(u=>URL.revokeObjectURL(u));
+  const files=[...e.target.files];
+  vURLs = files.map(f=>URL.createObjectURL(f));
+  vNames = files.map(f=>f.name);
+  const saved = JSON.parse(G.video_files||"[]");
+  vPeriods = files.map((f,i)=>saved.find(s=>s.name===f.name)?.period ?? (files.length>1?i+1:1));
+  renderVList(); selectVideo(vNames.indexOf((saved[G.last_video_idx]||{}).name)>=0?G.last_video_idx:0, true);
+  saveVideoMeta();
+};
+function renderVList(){
+  $("#vlist").innerHTML = vNames.map((n,i)=>
+    `<span class="${i===curIdx?"cur":""}"><button class="ghost" data-vsel="${i}">${esc(n)}</button>
+     P<select data-vper="${i}">${[1,2,3,4].map(p=>`<option ${p==vPeriods[i]?"selected":""} value="${p}">${p==4?"OT":p}</option>`).join("")}</select></span>`).join(" · ");
+  $$("[data-vsel]").forEach(b=>b.onclick=()=>selectVideo(+b.dataset.vsel));
+  $$("[data-vper]").forEach(s=>s.onchange=()=>{vPeriods[+s.dataset.vper]=+s.value;saveVideoMeta();});
+}
+function selectVideo(i, restore){
+  if(!vURLs[i]) return;
+  curIdx=i; video.src=vURLs[i];
+  if(restore) video.addEventListener("loadedmetadata",()=>{video.currentTime=G.last_video_pos||0;},{once:true});
+  renderVList();
+  if(cal&&cal.running){cal.running=false;setCkState();} // new file = clock mapping broken; recalibrate
+}
+function saveVideoMeta(){
+  G.video_files = JSON.stringify(vNames.map((n,i)=>({name:n,period:vPeriods[i]})));
+  api("/games/"+G.id,"PUT",{video_files:G.video_files});
+}
+
+/* ================= game clock ================= */
+function gameClock(){
+  if(!cal) return null;
+  if(!cal.running) return Math.max(0,cal.clock);
+  return Math.max(0, cal.clock - (video.currentTime - cal.videoT));
+}
+function setCkState(){
+  $("#ckState").textContent = !cal ? "not calibrated — press C" : (cal.running?"running":"STOPPED (K to run)");
+  $("#ckState").className = cal&&!cal.running ? "stopped" : "";
+}
+setInterval(()=>{
+  const c=gameClock();
+  $("#ckTime").textContent = c===null?"--:--":mmss(c);
+  if(cal) $("#ckPeriod").textContent = cal.period===4?"OT":"P"+cal.period;
+},150);
+function snap(){
+  const c=gameClock();
+  if(c===null){alert("Calibrate the clock first (C)");return null;}
+  return {period:cal.period, clock:Math.round(c), video_ts:video.currentTime, video_idx:curIdx};
+}
+
+/* session autosave: calibration + video position, every 5 s and on tab hide */
+function saveSession(keep){
+  if(!G) return;
+  const body={calibration:JSON.stringify(cal),last_video_pos:video.currentTime,last_video_idx:curIdx};
+  fetch("/api/games/"+G.id,{method:"PUT",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify(body),keepalive:!!keep}).catch(()=>{});
+  Object.assign(G,body);
+}
+setInterval(()=>{if(G&&!$("#tab-log").hidden&&vURLs.length)saveSession();},5000);
+document.addEventListener("visibilitychange",()=>{if(document.hidden)saveSession(true);});
+
+/* ================= open game / resume ================= */
+async function openGame(id){
+  G = await api("/games?id="+id).then(r=>r[0]);
+  EVS = await api("/events?game_id="+id);
+  cal = JSON.parse(G.calibration||"null");
+  const lastLu = EVS.filter(e=>e.type==="lineup").sort((a,b)=>a.id-b.id).pop();
+  onIce = new Set(lastLu?JSON.parse(lastLu.on_ice||"[]"):[]);
+  vURLs=[];vNames=[];vPeriods=[];curIdx=G.last_video_idx||0;
+  const tmap=Object.fromEntries(TEAMS.map(t=>[t.id,t.name]));
+  $("#lgTitle").textContent = `${G.home?"":"@ "}${tmap[G.opponent_id]??"?"} ${G.date??""}`;
+  const saved=JSON.parse(G.video_files||"[]");
+  $("#vprev").innerHTML = saved.length?`Re-select video file(s) for this game: <b>${saved.map(s=>esc(s.name)).join(", ")}</b> — resumes at ${mmss(G.last_video_pos||0)}`:"Pick the game video file(s) (they stay on disk, nothing is uploaded).";
+  $("#vlist").innerHTML="";video.removeAttribute("src");video.load();
+  $("#noGame").hidden=true;$("#logUI").hidden=false;
+  setCkState(); renderLog(); renderOnIce(); showTab("log");
+}
+function renderOnIce(){
+  $("#onIceNow").textContent = [...onIce].map(id=>{const p=PBYID()[id];return p?p.number:id;}).sort((a,b)=>a-b).join(" ")||"—";
+}
+
+/* ================= event log ================= */
+const elapsedOf = e=>(e.period-1)*(G.period_len||1200)+((G.period_len||1200)-e.clock);
+function evText(e){
+  const t={shot:"Shot",penalty:"Penalty",lineup:"Line",override:"Override"}[e.type];
+  if(e.type==="shot"){
+    const res=e.result==="goal"?"🥅 GOAL":e.result.replace("_"," ");
+    let s=`${e.team==="us"?(e.player_id?pname(e.player_id):"Falcons"):"Opponent"} — ${res}`;
+    if(e.result==="goal"&&(e.assist1_id||e.assist2_id)) s+=` (A: ${[e.assist1_id,e.assist2_id].filter(Boolean).map(pname).join(", ")})`;
+    if(e.blocker_id) s+=` · blk ${pname(e.blocker_id)}`;
+    if(e.screen_id) s+=` · screen ${pname(e.screen_id)}`;
+    return s;
+  }
+  if(e.type==="penalty") return `${e.team==="us"?pname(e.player_id)||"Falcons":"Opponent"} ${e.pim}′${e.zone?" · "+e.zone:""}`;
+  if(e.type==="lineup"){const ids=JSON.parse(e.on_ice||"[]");return ids.map(id=>{const p=PBYID()[id];return p?p.number:id;}).join(" ")||"empty";}
+  return e.override;
+}
+function renderLog(){
+  const rows = EVS.slice().sort((a,b)=>elapsedOf(b)-elapsedOf(a)||b.id-a.id);
+  $("#evTbl").innerHTML = "<tr><th>Time</th><th>Event</th><th></th></tr>"+rows.map(e=>
+    `<tr data-ev="${e.id}"><td>${e.period===4?"OT":"P"+e.period} ${mmss(e.clock)}</td>
+     <td>${e.type==="shot"&&e.result==="goal"?"<b>":""}${esc(evText(e))}${e.type==="shot"&&e.result==="goal"?"</b>":""}</td>
+     <td><button class="ghost" data-edit="${e.id}">✎</button><button class="ghost" data-del="${e.id}">✕</button></td></tr>`).join("");
+  $$("#evTbl tr[data-ev]").forEach(tr=>tr.onclick=ev=>{
+    if(ev.target.closest("button"))return;
+    const e=EVS.find(x=>x.id==+tr.dataset.ev);
+    if(e.video_idx!==curIdx&&vURLs[e.video_idx])selectVideo(e.video_idx);
+    if(vURLs.length){video.currentTime=e.video_ts||0;video.pause();}
+  });
+  $$("[data-del]").forEach(b=>b.onclick=async()=>{
+    await api("/events/"+b.dataset.del,"DELETE");
+    EVS=EVS.filter(e=>e.id!=+b.dataset.del); renderLog(); syncScore();
+  });
+  $$("[data-edit]").forEach(b=>b.onclick=()=>editEvent(+b.dataset.edit));
+  syncScore();
+}
+function syncScore(){
+  const gu=EVS.filter(e=>e.type==="shot"&&e.result==="goal"&&e.team==="us").length;
+  const go=EVS.filter(e=>e.type==="shot"&&e.result==="goal"&&e.team==="opp").length;
+  $("#lgScore").textContent=`${gu} : ${go}`;
+  if(G&&(G.score_us!==gu||G.score_opp!==go)){G.score_us=gu;G.score_opp=go;
+    api("/games/"+G.id,"PUT",{score_us:gu,score_opp:go}).then(()=>api("/games").then(g=>{GAMES=g;renderGames();}));}
+}
+async function postEvent(data){
+  const e = await api("/events","POST",Object.assign({game_id:G.id},data));
+  EVS.push(e); renderLog(); return e;
+}
+
+/* ================= rink & net SVG ================= */
+function rinkSVG(){
+  const C="var(--axis)";
+  return `<rect x="1" y="1" width="198" height="83" rx="24" fill="none" stroke="${C}"/>
+  <line x1="100" y1="1" x2="100" y2="84" stroke="var(--opp)" opacity=".45"/>
+  <line x1="75" y1="1" x2="75" y2="84" stroke="var(--us)" opacity=".45"/>
+  <line x1="125" y1="1" x2="125" y2="84" stroke="var(--us)" opacity=".45"/>
+  <line x1="11" y1="4" x2="11" y2="81" stroke="var(--opp)" opacity=".3"/>
+  <line x1="189" y1="4" x2="189" y2="81" stroke="var(--opp)" opacity=".3"/>
+  <circle cx="100" cy="42.5" r="15" fill="none" stroke="${C}" opacity=".6"/>
+  ${[[31,20.5],[31,64.5],[169,20.5],[169,64.5]].map(([x,y])=>`<circle cx="${x}" cy="${y}" r="15" fill="none" stroke="${C}" opacity=".6"/>`).join("")}
+  <path d="M 189 36.5 a 6 6 0 0 0 0 12" fill="none" stroke="var(--us)" opacity=".6"/>
+  <path d="M 11 36.5 a 6 6 0 0 1 0 12" fill="none" stroke="var(--us)" opacity=".6"/>
+  <rect x="189" y="39.5" width="3.4" height="6" fill="none" stroke="${C}"/>
+  <rect x="7.6" y="39.5" width="3.4" height="6" fill="none" stroke="${C}"/>`;
+}
+function netSVG(){
+  return `<rect x="0" y="0" width="72" height="48" fill="none" stroke="var(--opp)" stroke-width="2.5"/>
+  <line x1="0" y1="48" x2="72" y2="48" stroke="var(--axis)" stroke-width="3"/>
+  <line x1="24" y1="0" x2="24" y2="48" stroke="var(--grid)"/><line x1="48" y1="0" x2="48" y2="48" stroke="var(--grid)"/>
+  <line x1="0" y1="16" x2="72" y2="16" stroke="var(--grid)"/><line x1="0" y1="32" x2="72" y2="32" stroke="var(--grid)"/>`;
+}
+function svgPoint(svg,ev){
+  const pt=new DOMPoint(ev.clientX,ev.clientY).matrixTransform(svg.getScreenCTM().inverse());
+  return {x:pt.x,y:pt.y};
+}
+
+/* ================= dialogs: shared plumbing ================= */
+let resumeAfter=false, saving=false;
+async function save1(fn){ /* double-Enter guard: one save per dialog */
+  if(saving)return; saving=true; try{ await fn(); } finally{ saving=false; }
+}
+function openDlg(dlg){
+  resumeAfter = !video.paused && $("#optResume").checked;
+  video.pause(); dlg.showModal();
+}
+function afterSave(dlg){ dlg.close("save"); if(resumeAfter) video.play(); }
+function wireEnter(dlg, save){
+  dlg.addEventListener("keydown",e=>{
+    if(e.key!=="Enter")return;
+    e.preventDefault();
+    const f=[...dlg.querySelectorAll("input,select")].filter(el=>el.offsetParent!==null&&!el.disabled);
+    const i=f.indexOf(document.activeElement);
+    if(i>-1&&i<f.length-1) f[i+1].focus(); else save();
+  });
+}
+function jersey(inputSel, nameSel){ /* live jersey-number -> player name lookup */
+  const inp=$(inputSel);
+  inp.addEventListener("input",()=>{
+    const p=byNum(inp.value);
+    $(nameSel).textContent=p?p.name:(inp.value?"— no such number in lineup":"");
+  });
+  return ()=>{ if(!inp.value) return {ok:true,id:null};
+    const p=byNum(inp.value); return {ok:!!p,id:p?.id??null}; };
+}
+
+/* ================= calibrate dialog ================= */
+const dlgCal=$("#dlgCal");
+function openCal(){ openDlg(dlgCal); $("#calTime").value=""; $("#calTime").focus(); }
+function doCal(){
+  const secs=parseClock($("#calTime").value);
+  if(secs===null){$("#calTime").focus();return;}
+  cal={period:+$("#calPeriod").value,clock:secs,videoT:video.currentTime,videoIdx:curIdx,running:true};
+  setCkState(); saveSession(); afterSave(dlgCal);
+}
+wireEnter(dlgCal,doCal); $("#calSave").onclick=doCal;
+function toggleClock(){
+  if(!cal)return openCal();
+  if(cal.running){cal.clock=gameClock();cal.running=false;}
+  else{cal.videoT=video.currentTime;cal.videoIdx=curIdx;cal.running=true;}
+  setCkState(); saveSession();
+}
+
+/* ================= shot dialog ================= */
+const dlgShot=$("#dlgShot");
+let shot={}; // pending
+const getShooter=jersey("#shShooter","#shShooterName"), getBlocker=jersey("#shBlocker","#shBlockerName"),
+      getA1=jersey("#shA1","#shA1Name"), getA2=jersey("#shA2","#shA2Name"), getScreen=jersey("#shScreen","#shScreenName");
+$("#shotRink").addEventListener("click",ev=>{
+  const {x,y}=svgPoint($("#shotRink"),ev);
+  shot.x=Math.max(0,Math.min(200,x)); shot.y=Math.max(0,Math.min(85,y));
+  drawShotRink(); $("#shLocMsg").textContent="✓"; $("#shLocMsg").className="ok";
+});
+$("#netpick").addEventListener("click",ev=>{
+  const {x,y}=svgPoint($("#netpick"),ev);
+  shot.net_x=Math.max(0,Math.min(100,x/72*100)); shot.net_y=Math.max(0,Math.min(100,y/48*100));
+  drawNetPick();
+});
+$("#netClear").onclick=e=>{e.preventDefault();shot.net_x=shot.net_y=null;drawNetPick();};
+function drawShotRink(){
+  $("#shotRink").innerHTML=rinkSVG()+(shot.x!=null?`<circle cx="${shot.x}" cy="${shot.y}" r="2.6" fill="var(--us)"/>`:"");
+}
+function drawNetPick(){
+  $("#netpick").innerHTML=netSVG()+(shot.net_x!=null?`<circle cx="${shot.net_x*72/100}" cy="${shot.net_y*48/100}" r="3" fill="var(--us)"/>`:"");
+}
+function shotRows(){
+  const isGoal=$("#shResult").value==="goal";
+  $("#rowShooter").hidden = shot.team!=="us";
+  $("#rowBlocker").hidden = !(shot.team==="opp"&&$("#shResult").value==="blocked");
+  $("#rowGoal").hidden = !isGoal;
+  $("#rowAssists").hidden = $("#rowScreen").hidden = shot.team!=="us";
+  $("#rowNet").hidden = !(isGoal||$("#shResult").value==="on_goal");
+}
+$("#shResult").onchange=shotRows;
+function openShot(team,goal,ev){
+  shot = ev ? {team:ev.team,x:ev.x,y:ev.y,net_x:ev.net_x,net_y:ev.net_y}
+            : {team,x:null,y:null,net_x:null,net_y:null};
+  editingId = ev?ev.id:null;
+  $("#shTitle").textContent=(ev?"Edit shot — ":"")+(shot.team==="us"?"Falcons":"Opponent")+(goal?" GOAL":" shot");
+  $("#shResult").value = ev?ev.result:(goal?"goal":"on_goal");
+  $("#shShooter").value=ev?.player_id?PBYID()[ev.player_id]?.number??"":"";
+  $("#shBlocker").value=ev?.blocker_id?PBYID()[ev.blocker_id]?.number??"":"";
+  $("#shA1").value=ev?.assist1_id?PBYID()[ev.assist1_id]?.number??"":"";
+  $("#shA2").value=ev?.assist2_id?PBYID()[ev.assist2_id]?.number??"":"";
+  $("#shScreen").value=ev?.screen_id?PBYID()[ev.screen_id]?.number??"":"";
+  $("#shLocMsg").textContent=shot.x!=null?"✓":"location required";
+  $("#shLocMsg").className=shot.x!=null?"ok":"err";
+  ["#shShooterName","#shBlockerName","#shA1Name","#shA2Name","#shScreenName"].forEach(s=>$(s).textContent="");
+  drawShotRink(); drawNetPick(); shotRows();
+  openDlg(dlgShot);
+  (shot.team==="us"?$("#shShooter"):$("#shResult")).focus();
+}
+async function saveShot(){
+  if(shot.x==null){$("#shLocMsg").textContent="location required — click the rink";$("#shLocMsg").className="err";return;}
+  const res=$("#shResult").value;
+  const sh=getShooter(), bl=getBlocker(), a1=getA1(), a2=getA2(), sc=getScreen();
+  if(shot.team==="us"&&(!sh.ok||sh.id===null)){$("#shShooter").focus();$("#shShooterName").textContent="shooter required";return;}
+  if(![bl,a1,a2,sc].every(r=>r.ok)){alert("A jersey number doesn't match the lineup");return;}
+  const data={type:"shot",team:shot.team,x:shot.x,y:shot.y,result:res,
+    player_id:shot.team==="us"?sh.id:null,
+    blocker_id:(shot.team==="opp"&&res==="blocked")?bl.id:null,
+    assist1_id:res==="goal"?a1.id:null, assist2_id:res==="goal"?a2.id:null,
+    screen_id:(res==="goal"&&shot.team==="us")?sc.id:null,
+    net_x:shot.net_x, net_y:shot.net_y};
+  if(editingId){
+    const e=await api("/events/"+editingId,"PUT",data);
+    EVS[EVS.findIndex(x=>x.id===editingId)]=e; editingId=null; renderLog();
+  } else {
+    const s=snap(); if(!s)return;
+    await postEvent(Object.assign(data,s));
+  }
+  afterSave(dlgShot);
+}
+wireEnter(dlgShot,()=>save1(saveShot)); $("#shSave").onclick=()=>save1(saveShot);
+
+/* ================= penalty dialog ================= */
+const dlgPen=$("#dlgPen");
+const getPenP=jersey("#penPlayer","#penPlayerName");
+let penTeam="us";
+function openPen(team,ev){
+  penTeam=team; editingId=ev?ev.id:null;
+  $("#penTitle").textContent=(ev?"Edit penalty — ":"Penalty — ")+(team==="us"?"Falcons":"Opponent");
+  $("#rowPenPlayer").hidden=$("#rowPenZone").hidden=(team!=="us");
+  $("#penPlayer").value=ev?.player_id?PBYID()[ev.player_id]?.number??"":"";
+  $("#penPlayerName").textContent="";
+  $("#penLen").value=ev?String(ev.pim):"2";
+  $("#penZone").value=ev?.zone||"def";
+  openDlg(dlgPen);
+  (team==="us"?$("#penPlayer"):$("#penLen")).focus();
+}
+async function savePen(){
+  const p=getPenP();
+  if(penTeam==="us"&&(!p.ok||p.id===null)){$("#penPlayer").focus();$("#penPlayerName").textContent="player required";return;}
+  const data={type:"penalty",team:penTeam,pim:+$("#penLen").value,
+    player_id:penTeam==="us"?p.id:null, zone:penTeam==="us"?$("#penZone").value:null};
+  if(editingId){
+    const e=await api("/events/"+editingId,"PUT",data);
+    EVS[EVS.findIndex(x=>x.id===editingId)]=e; editingId=null; renderLog();
+  } else {
+    const s=snap(); if(!s)return;
+    await postEvent(Object.assign(data,s));
+  }
+  afterSave(dlgPen);
+}
+wireEnter(dlgPen,()=>save1(savePen)); $("#penSave").onclick=()=>save1(savePen);
+
+/* ================= lineup dialog ================= */
+const dlgLu=$("#dlgLineup");
+function renderChips(){
+  $("#luChips").innerHTML=[...onIce].map(id=>{const p=PBYID()[id];
+    return `<span class="chip">${p?p.number+" "+esc(p.name):id}</span>`;}).join("")||`<span class="hint">nobody on ice</span>`;
+}
+function openLineup(ev){
+  editingId=ev?ev.id:null;
+  if(ev) onIce=new Set(JSON.parse(ev.on_ice||"[]"));
+  renderChips(); openDlg(dlgLu); $("#luInput").value=""; $("#luInput").focus();
+}
+dlgLu.addEventListener("keydown",async e=>{
+  if(e.key!=="Enter")return;
+  e.preventDefault();
+  const v=$("#luInput").value.trim();
+  if(v==="c"){onIce.clear();renderChips();$("#luInput").value="";return;}
+  if(v!==""){
+    const p=byNum(v);
+    if(p){onIce.has(p.id)?onIce.delete(p.id):onIce.add(p.id);renderChips();}
+    $("#luInput").value=""; return;
+  }
+  save1(async()=>{
+    const data={type:"lineup",team:"us",on_ice:JSON.stringify([...onIce])};
+    if(editingId){
+      const ev2=await api("/events/"+editingId,"PUT",data);
+      EVS[EVS.findIndex(x=>x.id===editingId)]=ev2; editingId=null; renderLog();
+    } else {
+      const s=snap(); if(!s)return;
+      await postEvent(Object.assign(data,s));
+    }
+    renderOnIce(); afterSave(dlgLu);
+  });
+});
+
+/* ================= override dialog ================= */
+const dlgOvr=$("#dlgOvr");
+function openOvr(ev){
+  editingId=ev?ev.id:null;
+  $("#ovrVal").value=ev?.override||"auto";
+  openDlg(dlgOvr); $("#ovrVal").focus();
+}
+async function saveOvr(){
+  const data={type:"override",team:"us",override:$("#ovrVal").value};
+  if(editingId){
+    const e=await api("/events/"+editingId,"PUT",data);
+    EVS[EVS.findIndex(x=>x.id===editingId)]=e; editingId=null; renderLog();
+  } else {
+    const s=snap(); if(!s)return;
+    await postEvent(Object.assign(data,s));
+  }
+  afterSave(dlgOvr);
+}
+wireEnter(dlgOvr,()=>save1(saveOvr)); $("#ovrSave").onclick=()=>save1(saveOvr);
+
+/* edit dispatch */
+function editEvent(id){
+  const e=EVS.find(x=>x.id===id);
+  if(e.type==="shot")openShot(e.team,e.result==="goal",e);
+  else if(e.type==="penalty")openPen(e.team,e);
+  else if(e.type==="lineup")openLineup(e);
+  else openOvr(e);
+}
+
+/* ================= global shortcuts ================= */
+document.addEventListener("keydown",e=>{
+  if(document.querySelector("dialog[open]"))return;
+  if(e.target.closest("input,select,textarea,button"))return;
+  if(!$("#tab-log").classList.contains("on")||!G)return;
+  const k=e.key.length===1?e.key.toLowerCase():e.key;
+  const acts={
+    [KEYS.playPause]:()=>video.paused?video.play():video.pause(),
+    [KEYS.back]:()=>video.currentTime-= e.shiftKey?1:5,
+    [KEYS.fwd]:()=>video.currentTime+= e.shiftKey?1:5,
+    [KEYS.slower]:()=>video.playbackRate=Math.max(.25,video.playbackRate-.25),
+    [KEYS.faster]:()=>video.playbackRate=Math.min(4,video.playbackRate+.25),
+    [KEYS.calibrate]:openCal, [KEYS.clock]:toggleClock,
+    [KEYS.shotUs]:()=>openShot("us",false), [KEYS.shotOpp]:()=>openShot("opp",false),
+    [KEYS.goalUs]:()=>openShot("us",true), [KEYS.goalOpp]:()=>openShot("opp",true),
+    [KEYS.penUs]:()=>openPen("us"), [KEYS.penOpp]:()=>openPen("opp"),
+    [KEYS.lineup]:()=>openLineup(), [KEYS.override]:()=>openOvr(),
+  };
+  if(acts[k]){e.preventDefault();acts[k]();}
+});
+$$("dialog").forEach(d=>d.addEventListener("close",()=>{editingId=null;}));
+
+/* ================= dashboard ================= */
+function fillDashFilters(){
+  $("#fSeason").innerHTML=`<option value="0">All seasons</option>`+SEASONS.map(s=>`<option value="${s.id}">${esc(s.name)}</option>`).join("");
+  $("#fOpp").innerHTML=`<option value="0">All opponents</option>`+TEAMS.map(t=>`<option value="${t.id}">${esc(t.name)}</option>`).join("");
+  const tmap=Object.fromEntries(TEAMS.map(t=>[t.id,t.name]));
+  $("#fGames").innerHTML=GAMES.map(g=>`<option value="${g.id}">${esc(g.date)} ${g.home?"vs":"@"} ${esc(tmap[g.opponent_id]??"?")}</option>`).join("");
+  $("#hPlayer").innerHTML=`<option value="0">All players</option>`+PLAYERS.map(p=>`<option value="${p.id}">${p.number??"?"} ${esc(p.name)}</option>`).join("");
+}
+let DASH=null;
+async function loadDash(){
+  const gids=[...$("#fGames").selectedOptions].map(o=>o.value).join(",");
+  const q=new URLSearchParams({season_id:$("#fSeason").value,opponent_id:$("#fOpp").value,
+    home:$("#fHome").value,state:$("#fState").value,period:$("#fPeriod").value,game_ids:gids});
+  DASH=await api("/stats?"+q);
+  renderDash();
+}
+$("#fGo").onclick=loadDash;
+const TOI=s=>s?mmss(s):"0:00";
+function renderDash(){
+  const t=DASH.team;
+  $("#tiles").innerHTML=[
+    ["Score",`${t.gf} : ${t.ga}`,"goals for : against"],
+    ["SOG",`${t.sog_f} / ${t.sog_a}`,"for / against"],
+    ["Sh%",t.sh_pct+"%","goals ÷ SOG"],
+    ["PP",t.pp_pct+"%",`${t.ppg}/${t.pp_opps} opps`],
+    ["PK",t.pk_pct+"%",`${t.sh_times-t.ppga}/${t.sh_times} killed`],
+    ["xG",`${t.xg_f} : ${t.xg_a}`,"expected goals f : a"],
+  ].map(([l,v,s])=>`<div class="tile"><span>${l}</span><b>${v}</b><span>${s}</span></div>`).join("");
+  $("#teamTbl").innerHTML=`<tr><th></th><th>For</th><th>Against</th></tr>
+    <tr><td>Goals</td><td>${t.gf}</td><td>${t.ga}</td></tr>
+    <tr><td>Shots on goal</td><td>${t.sog_f}</td><td>${t.sog_a}</td></tr>
+    <tr><td>All attempts</td><td>${t.att_f}</td><td>${t.att_a}</td></tr>
+    <tr><td>xG</td><td>${t.xg_f}</td><td>${t.xg_a}</td></tr>
+    <tr><td>Shooting %</td><td>${t.sh_pct}%</td><td></td></tr>
+    <tr><td>PP</td><td>${t.ppg} G / ${t.pp_opps} opps (${t.pp_pct}%)</td><td>SOG per PP: ${t.shots_per_pp}</td></tr>
+    <tr><td>PK</td><td>${t.sh_times-t.ppga} killed / ${t.sh_times} (${t.pk_pct}%)</td><td>GA on PK: ${t.ppga}</td></tr>
+    <tr><td>Penalties (zone O/N/D)</td><td>${t.pens_zone.off} / ${t.pens_zone.neu} / ${t.pens_zone.def}</td><td>PIM ${t.pim}</td></tr>`;
+  const periods=Object.keys(t.by_period).sort();
+  const mx=Math.max(1,...periods.flatMap(p=>[t.by_period[p].sf,t.by_period[p].sa]));
+  $("#periodBars").innerHTML=periods.map(p=>{const d=t.by_period[p];return `
+    <div class="brow"><span>${p==4?"OT":"P"+p}</span>
+    <span><span class="bar" title="SOG for P${p}: ${d.sf}" style="width:${d.sf/mx*90}%;background:var(--us)"></span><span class="bnum">${d.sf}</span></span>
+    <span><span class="bar" title="SOG against P${p}: ${d.sa}" style="width:${d.sa/mx*90}%;background:var(--opp)"></span><span class="bnum">${d.sa}</span></span></div>`;}).join("")
+    ||`<div class="hint">no shots in the current filter</div>`;
+  $("#playersTbl").innerHTML=`<tr><th>#</th><th>Player</th><th>GP</th><th>G</th><th>A</th><th>P</th><th>SOG</th><th>Att</th><th>Sh%</th><th>xG</th><th>Blk</th><th>Pen</th><th>PIM</th><th>Scr</th><th>TOI</th><th>5v5</th><th>PP</th><th>PK</th><th>P/60</th><th>S/60 5v5</th><th>SF on</th><th>SA on</th><th>GF on</th><th>GA on</th></tr>`+
+    DASH.players.map(p=>`<tr><td>${p.number??""}</td><td>${esc(p.name)}</td><td>${p.gp}</td><td>${p.g}</td><td>${p.a}</td><td><b>${p.p}</b></td>
+      <td>${p.sog}</td><td>${p.att}</td><td>${p.sh_pct}</td><td>${p.xg}</td><td>${p.blk}</td><td>${p.pen}</td><td>${p.pim}</td><td>${p.screens}</td>
+      <td>${TOI(p.toi)}</td><td>${TOI(p.toi_5v5)}</td><td>${TOI(p.toi_pp)}</td><td>${TOI(p.toi_pk)}</td>
+      <td>${p.p60}</td><td>${p.s60_5v5}</td><td>${p.sf_on}</td><td>${p.sa_on}</td><td>${p.gf_on}</td><td>${p.ga_on}</td></tr>`).join("");
+  drawMaps();
+}
+["hTeam","hPlayer","hResult","hMode"].forEach(id=>$("#"+id).onchange=drawMaps);
+const RESCOLOR={goal:"var(--goal)",on_goal:"var(--us)",missed:"var(--miss)",blocked:"var(--block)"};
+function drawMaps(){
+  if(!DASH)return;
+  const team=$("#hTeam").value, pid=+$("#hPlayer").value, res=$("#hResult").value, mode=$("#hMode").value;
+  const shots=DASH.shots.filter(s=>s.team===team&&(!pid||s.player_id===pid)&&(!res||s.result===res)&&s.x!=null);
+  const marks=shots.map(s=>{
+    const tip=`<title>${s.result==="goal"?"GOAL":s.result} · ${s.player_id?esc((PBYID()[s.player_id]||{}).name||""):"opponent"} · P${s.period} · ${s.state} · xG ${s.xg??"—"}</title>`;
+    if(mode==="density")
+      return `<circle cx="${s.x}" cy="${s.y}" r="7" fill="${team==="us"?"var(--us)":"var(--opp)"}" opacity="0.16">${tip}</circle>`;
+    const goal=s.result==="goal";
+    return `<circle cx="${s.x}" cy="${s.y}" r="${goal?3:1.9}" fill="${RESCOLOR[s.result]}" ${goal?'stroke="var(--surface)" stroke-width="0.8"':""} >${tip}</circle>`;
+  }).join("");
+  $("#heatmap").innerHTML=rinkSVG()+marks;
+  $("#hLegend").style.display=mode==="dots"?"":"none";
+  const nets=shots.filter(s=>s.net_x!=null);
+  $("#netmap").innerHTML=netSVG()+nets.map(s=>
+    `<circle cx="${s.net_x*72/100}" cy="${s.net_y*48/100}" r="2.6" fill="${s.result==="goal"?"var(--goal)":"var(--us)"}">
+     <title>${s.result} · xG ${s.xg??"—"}</title></circle>`).join("")+
+    (nets.length?"":`<text x="8" y="24" style="font-size:6px">no placement data in filter</text>`);
+}
+/* CSV export: any table -> download */
+$$("[data-csv]").forEach(b=>b.onclick=()=>{
+  const rows=[...document.getElementById(b.dataset.csv).rows].map(r=>
+    [...r.cells].map(c=>`"${c.textContent.replaceAll('"','""')}"`).join(","));
+  const a=document.createElement("a");
+  a.href=URL.createObjectURL(new Blob([rows.join("\n")],{type:"text/csv"}));
+  a.download=b.dataset.csv+".csv"; a.click(); URL.revokeObjectURL(a.href);
+});
+
+loadRefs();
+</script>
+</body>
+</html>
