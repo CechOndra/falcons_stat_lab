@@ -44,6 +44,9 @@ kbd{background:var(--grid);border-radius:4px;padding:1px 5px;font-size:12px;font
 dialog{background:var(--surface);color:var(--ink);border:1px solid var(--border);border-radius:12px;padding:16px;max-width:640px}
 dialog::backdrop{background:rgba(0,0,0,.45)}
 .chips{display:flex;gap:6px;flex-wrap:wrap;min-height:30px}
+.lubtn{padding:4px 9px;margin:2px}
+.lubtn.on{background:var(--us);border-color:var(--us);color:#fff}
+.linebtn{font-weight:700;min-width:40px}
 .chip{background:var(--grid);border-radius:14px;padding:3px 10px;font-weight:600}
 .grid2{display:grid;grid-template-columns:1fr 340px;gap:12px}
 @media(max-width:900px){.grid2{grid-template-columns:1fr}}
@@ -131,7 +134,7 @@ a{color:var(--us)}
     <div>
       <div class="card">
         <div class="clock"><span id="ckPeriod">P1</span> <span id="ckTime">--:--</span> <small id="ckState">not calibrated — press C</small></div>
-        <div class="hint">On ice: <span id="onIceNow">—</span></div>
+        <div class="hint">On ice: <span id="onIceNow">—</span> · <button class="ghost" id="btnLines">Edit lines</button></div>
       </div>
       <div class="card">
         <h3>Event log</h3>
@@ -165,6 +168,13 @@ a{color:var(--us)}
   </div>
   <div class="card"><h3>Players <button class="ghost" data-csv="playersTbl">⬇ CSV</button></h3>
     <div class="tblwrap"><table id="playersTbl"></table></div>
+  </div>
+  <div class="card"><h3>Together on ice</h3>
+    <h3>Line units <button class="ghost" data-csv="unitsTbl">⬇ CSV</button></h3>
+    <div class="tblwrap"><table id="unitsTbl"></table></div>
+    <h3>Player pairs — top 30 by shared TOI <button class="ghost" data-csv="pairsTbl">⬇ CSV</button></h3>
+    <div class="tblwrap"><table id="pairsTbl"></table></div>
+    <div class="hint">TOI both/all on ice together; GF/GA = goals for/against while together. Units are the lines defined per game (same trio/pair logged across games adds up).</div>
   </div>
   <div class="card"><h3>Shot map</h3>
     <div class="row">
@@ -264,11 +274,22 @@ a{color:var(--us)}
   <div class="row"><button class="pri save" id="penSave">Save (Enter)</button></div>
 </dialog>
 
-<dialog id="dlgLineup">
+<dialog id="dlgLineup" style="min-width:min(560px,92vw)">
   <h3>Players on ice</h3>
+  <div id="luGrid"></div>
   <div class="chips" id="luChips"></div>
-  <input id="luInput" inputmode="numeric" placeholder="jersey # + Enter toggles" autocomplete="off">
-  <div class="hint"><kbd>Enter</kbd> on empty field = save · type <kbd>c</kbd> + Enter = clear all · Esc = cancel</div>
+  <input id="luInput" inputmode="numeric" placeholder="jersey # / f1–f4 / d1–d3 / g / c  + Enter" autocomplete="off">
+  <div class="hint">Click players to toggle, line buttons swap the whole line (extras stay). Or type + <kbd>Enter</kbd>:
+    jersey number · <kbd>f2</kbd>/<kbd>d1</kbd> line swap · <kbd>g</kbd> pull/return goalie · <kbd>c</kbd> clear skaters.
+    <kbd>Enter</kbd> on empty = save · Esc = cancel</div>
+</dialog>
+
+<dialog id="dlgLines">
+  <h3>Lines for this game</h3>
+  <div id="linesList" style="max-height:55vh;overflow-y:auto"></div>
+  <div class="hint">Unassigned players show as <b>extras</b> in the line-change panel (line buttons never remove them).
+    Edit any time — mid-game shuffles included. <b>G</b> marks the goalie in net.</div>
+  <div class="row"><button class="pri save" id="linesSave">Save (Enter)</button></div>
 </dialog>
 
 <dialog id="dlgOvr">
@@ -489,6 +510,8 @@ async function openGame(id){
   cal = JSON.parse(G.calibration||"null");
   const lastLu = EVS.filter(e=>e.type==="lineup").sort((a,b)=>a.id-b.id).pop();
   onIce = new Set(lastLu?JSON.parse(lastLu.on_ice||"[]"):[]);
+  const gid0=goalieOf();
+  goaliePulled = !!(gid0 && lastLu && !onIce.has(gid0));
   vURLs=[];vNames=[];vPeriods=[];curIdx=G.last_video_idx||0;
   const tmap=Object.fromEntries(TEAMS.map(t=>[t.id,t.name]));
   $("#lgTitle").textContent = `${G.home?"":"@ "}${tmap[G.opponent_id]??"?"} ${G.date??""}`;
@@ -725,28 +748,99 @@ async function savePen(){
 }
 wireEnter(dlgPen,()=>save1(savePen)); $("#penSave").onclick=()=>save1(savePen);
 
+/* ================= lines editor (per game, editable mid-game) ================= */
+const LKEYS=["F1","F2","F3","F4","D1","D2","D3","G"];
+const dlgLines=$("#dlgLines");
+const gameLines=()=>JSON.parse(G?.lines||"{}");
+const goalieOf=()=>{const e=Object.entries(gameLines()).find(([,k])=>k==="G");return e?+e[0]:null;};
+$("#btnLines").onclick=()=>{
+  if(!G)return;
+  const lines=gameLines();
+  const roster=JSON.parse(G.roster||"[]").map(id=>PBYID()[id]).filter(Boolean)
+    .sort((a,b)=>(a.number??99)-(b.number??99));
+  $("#linesList").innerHTML=roster.map(p=>`<div class="row">
+    <span style="width:170px">${p.number??"?"} ${esc(p.name)} <small class="hint">${esc(p.position)}</small></span>
+    <select data-line-p="${p.id}">${["",...LKEYS].map(k=>
+      `<option value="${k}" ${(lines[p.id]||"")===k?"selected":""}>${k||"—"}</option>`).join("")}</select>
+  </div>`).join("");
+  openDlg(dlgLines);
+};
+async function saveLines(){
+  const lines={};
+  $$("[data-line-p]").forEach(s=>{if(s.value)lines[s.dataset.lineP]=s.value;});
+  G.lines=JSON.stringify(lines);
+  await api("/games/"+G.id,"PUT",{lines:G.lines});
+  afterSave(dlgLines);
+}
+wireEnter(dlgLines,()=>save1(saveLines)); $("#linesSave").onclick=()=>save1(saveLines);
+
 /* ================= lineup dialog ================= */
 const dlgLu=$("#dlgLineup");
+let goaliePulled=false;
 function renderChips(){
   $("#luChips").innerHTML=[...onIce].map(id=>{const p=PBYID()[id];
     return `<span class="chip">${p?p.number+" "+esc(p.name):id}</span>`;}).join("")||`<span class="hint">nobody on ice</span>`;
 }
+function swapLine(key){ // put line `key` on; benches same-group lines, extras untouched
+  const lines=gameLines(), grp=key[0];
+  for(const [pid,k] of Object.entries(lines)) if(k!=="G"&&k[0]===grp) onIce.delete(+pid);
+  for(const [pid,k] of Object.entries(lines)) if(k===key) onIce.add(+pid);
+}
+function togglePull(){
+  const gid=goalieOf(); if(!gid)return;
+  goaliePulled=!goaliePulled;
+  goaliePulled?onIce.delete(gid):onIce.add(gid);
+}
+function renderLu(){
+  const lines=gameLines(), gid=goalieOf();
+  const roster=JSON.parse(G.roster||"[]");
+  const groups={};
+  roster.forEach(id=>{const k=lines[id];if(k&&k!=="G")(groups[k]=groups[k]||[]).push(id);});
+  const extras=roster.filter(id=>!lines[id]);
+  const btn=id=>{const p=PBYID()[id];
+    return `<button class="lubtn ${onIce.has(id)?"on":""}" data-lu-p="${id}">${p?`${p.number} ${esc(p.name.split(" ").pop())}`:id}</button>`;};
+  let html="";
+  for(const k of LKEYS.slice(0,-1)) if(groups[k])
+    html+=`<div class="row"><button class="lubtn linebtn" data-lu-line="${k}">${k}</button>${groups[k].map(btn).join("")}</div>`;
+  if(extras.length)
+    html+=`<div class="row"><span class="hint" style="min-width:40px">extra</span>${extras.map(btn).join("")}</div>`;
+  if(gid){const p=PBYID()[gid];
+    html+=`<div class="row"><span class="hint" style="min-width:40px">G</span>
+      <span class="chip">${p?p.number+" "+esc(p.name):gid}</span>
+      <button class="lubtn ${goaliePulled?"":"on"}" id="luPull">${goaliePulled?"PULLED — click to return":"in net — click to pull"}</button></div>`;}
+  else html+=`<div class="row hint">no goalie set — assign one in “Edit lines” (G)</div>`;
+  $("#luGrid").innerHTML=html;
+  $$("[data-lu-p]").forEach(b=>b.onclick=()=>{const id=+b.dataset.luP;
+    onIce.has(id)?onIce.delete(id):onIce.add(id);renderLu();});
+  $$("[data-lu-line]").forEach(b=>b.onclick=()=>{swapLine(b.dataset.luLine);renderLu();});
+  const lp=$("#luPull"); if(lp)lp.onclick=()=>{togglePull();renderLu();};
+  renderChips();
+  $("#luInput").focus();
+}
 function openLineup(ev){
   editingId=ev?ev.id:null;
   if(ev) onIce=new Set(JSON.parse(ev.on_ice||"[]"));
-  renderChips(); openDlg(dlgLu); $("#luInput").value=""; $("#luInput").focus();
+  const gid=goalieOf();
+  if(gid){ if(ev) goaliePulled=!onIce.has(gid); else if(!goaliePulled) onIce.add(gid); }
+  openDlg(dlgLu); $("#luInput").value=""; renderLu();
 }
 dlgLu.addEventListener("keydown",async e=>{
   if(e.key!=="Enter")return;
   e.preventDefault();
-  const v=$("#luInput").value.trim();
-  if(v==="c"){onIce.clear();renderChips();$("#luInput").value="";return;}
+  const v=$("#luInput").value.trim().toLowerCase();
+  $("#luInput").value="";
+  if(v==="c"){const gid=goalieOf();onIce.clear();if(gid&&!goaliePulled)onIce.add(gid);renderLu();return;}
+  if(v==="g"){togglePull();renderLu();return;}
+  const lm=/^([fd])([1-4])$/.exec(v);
+  if(lm){swapLine(lm[0].toUpperCase());renderLu();return;}
   if(v!==""){
     const p=byNum(v);
-    if(p){onIce.has(p.id)?onIce.delete(p.id):onIce.add(p.id);renderChips();}
-    $("#luInput").value=""; return;
+    if(p){onIce.has(p.id)?onIce.delete(p.id):onIce.add(p.id);renderLu();}
+    return;
   }
   save1(async()=>{
+    const gid=goalieOf();
+    if(gid&&!goaliePulled)onIce.add(gid);
     const data={type:"lineup",team:"us",on_ice:JSON.stringify([...onIce])};
     if(editingId){
       const ev2=await api("/events/"+editingId,"PUT",data);
@@ -859,6 +953,13 @@ function renderDash(){
       <td>${p.sog}</td><td>${p.att}</td><td>${p.sh_pct}</td><td>${p.xg}</td><td>${p.blk}</td><td>${p.pen}</td><td>${p.pim}</td><td>${p.screens}</td>
       <td>${TOI(p.toi)}</td><td>${TOI(p.toi_5v5)}</td><td>${TOI(p.toi_pp)}</td><td>${TOI(p.toi_pk)}</td>
       <td>${p.p60}</td><td>${p.s60_5v5}</td><td>${p.sf_on}</td><td>${p.sa_on}</td><td>${p.gf_on}</td><td>${p.ga_on}</td></tr>`).join("");
+  const tg=DASH.together||{units:[],pairs:[]};
+  $("#unitsTbl").innerHTML="<tr><th>Line</th><th>Players</th><th>TOI together</th><th>GF</th><th>GA</th></tr>"+
+    (tg.units.map(u=>`<tr><td>${esc(u.line)}</td><td>${esc(u.players)}</td><td>${TOI(u.toi)}</td><td>${u.gf}</td><td>${u.ga}</td></tr>`).join("")
+     ||`<tr><td colspan="5" class="hint">no lines defined / no lineup data in filter</td></tr>`);
+  $("#pairsTbl").innerHTML="<tr><th>Pair</th><th>TOI together</th><th>GF</th><th>GA</th></tr>"+
+    (tg.pairs.map(p=>`<tr><td>${esc(p.players)}</td><td>${TOI(p.toi)}</td><td>${p.gf}</td><td>${p.ga}</td></tr>`).join("")
+     ||`<tr><td colspan="4" class="hint">no lineup data</td></tr>`);
   drawMaps();
 }
 ["hTeam","hPlayer","hResult","hMode"].forEach(id=>$("#"+id).onchange=drawMaps);

@@ -38,6 +38,7 @@ CREATE TABLE IF NOT EXISTS games(
   score_us INTEGER DEFAULT 0, score_opp INTEGER DEFAULT 0,
   period_len INTEGER DEFAULT 1200,
   roster TEXT DEFAULT '[]',      -- ponytail: JSON player-id list; join table when multi-team/auth lands
+  lines TEXT DEFAULT '{}',       -- JSON {player_id: "F1".."F4"|"D1".."D3"|"G"}; unassigned = extras
   video_files TEXT DEFAULT '[]', -- JSON [{name,period}] - browsers can't reopen local files, names drive the re-select prompt
   last_video_pos REAL DEFAULT 0, last_video_idx INTEGER DEFAULT 0,
   calibration TEXT DEFAULT 'null',
@@ -69,7 +70,7 @@ COLS = {
     "players": ["number", "name", "position", "photo", "active"],
     "users": ["name", "role", "player_id"],
     "games": ["season_id", "opponent_id", "date", "home", "score_us", "score_opp",
-              "period_len", "roster", "video_files", "last_video_pos",
+              "period_len", "roster", "lines", "video_files", "last_video_pos",
               "last_video_idx", "calibration", "notes"],
     "events": ["game_id", "type", "team", "period", "clock", "video_ts", "video_idx",
                "player_id", "x", "y", "result", "blocker_id", "assist1_id",
@@ -88,6 +89,10 @@ def db():
 def seed():
     con = db()
     con.executescript(SCHEMA)
+    try:  # migration for DBs created before per-game lines existed
+        con.execute("ALTER TABLE games ADD COLUMN lines TEXT DEFAULT '{}'")
+    except sqlite3.OperationalError:
+        pass
     if not con.execute("SELECT 1 FROM seasons LIMIT 1").fetchone():
         con.execute("INSERT INTO seasons(name) VALUES ('2025/26')")
     if not con.execute("SELECT 1 FROM users LIMIT 1").fetchone():
@@ -228,9 +233,17 @@ def analyze_game(game, evs):
     sh_times = sum(1 for seg in segs if seg[2] == "pk")
     # ponytail: a 5v3 counts as one opportunity (one contiguous pp segment)
 
-    # TOI + on-ice: lineup snapshot i holds until snapshot i+1 (or game end)
+    # defined line units (2+ members) for together-TOI; "G" is the goalie slot
+    line_map = json.loads(game.get("lines") or "{}")
+    unit_defs = {}
+    for pid, key in line_map.items():
+        if key and key != "G":
+            unit_defs.setdefault(key, set()).add(int(pid))
+    unit_defs = {k: frozenset(v) for k, v in unit_defs.items() if len(v) >= 2}
+
+    # TOI + together-TOI: lineup snapshot i holds until snapshot i+1 (or game end)
     lineups = [e for e in evs if e["type"] == "lineup"]
-    toi, onice = {}, {}
+    toi, onice, pairs, units = {}, {}, {}, {}
     for i, lu in enumerate(lineups):
         start = lu["t"]
         end = lineups[i + 1]["t"] if i + 1 < len(lineups) else game_end
@@ -243,6 +256,18 @@ def analyze_game(game, evs):
                 d = toi.setdefault(pid, {"total": 0, "5v5": 0, "pp": 0, "pk": 0})
                 d["total"] += dur
                 d[st] += dur
+        full = max(0, min(end, game_end) - start)
+        if full:
+            sids = sorted(ids)
+            for x in range(len(sids)):
+                for y in range(x + 1, len(sids)):
+                    p = pairs.setdefault((sids[x], sids[y]), {"toi": 0, "gf": 0, "ga": 0})
+                    p["toi"] += full
+            idset = set(ids)
+            for key, mem in unit_defs.items():
+                if mem <= idset:
+                    u = units.setdefault((key, mem), {"toi": 0, "gf": 0, "ga": 0})
+                    u["toi"] += full
     times = [lu["t"] for lu in lineups]
     for sh in shots:
         if sh["result"] not in ("goal", "on_goal"):
@@ -253,14 +278,26 @@ def analyze_game(game, evs):
                 idx = i
         if idx is None:
             continue
-        for pid in json.loads(lineups[idx]["on_ice"] or "[]"):
+        ids = json.loads(lineups[idx]["on_ice"] or "[]")
+        for pid in ids:
             d = onice.setdefault(pid, {"sf": 0, "sa": 0, "gf": 0, "ga": 0})
             d["sf" if sh["team"] == "us" else "sa"] += 1
             if sh["result"] == "goal":
                 d["gf" if sh["team"] == "us" else "ga"] += 1
+        if sh["result"] == "goal":
+            gk = "gf" if sh["team"] == "us" else "ga"
+            sids = sorted(ids)
+            for x in range(len(sids)):
+                for y in range(x + 1, len(sids)):
+                    if (sids[x], sids[y]) in pairs:
+                        pairs[(sids[x], sids[y])][gk] += 1
+            idset = set(ids)
+            for key, mem in unit_defs.items():
+                if mem <= idset and (key, mem) in units:
+                    units[(key, mem)][gk] += 1
 
     return {"shots": shots, "pens": pens, "pp_opps": pp_opps, "sh_times": sh_times,
-            "toi": toi, "onice": onice, "plen": plen}
+            "toi": toi, "onice": onice, "pairs": pairs, "units": units, "plen": plen}
 
 
 @app.get("/api/stats")
@@ -286,6 +323,7 @@ def stats(season_id: int = 0, game_ids: str = "", opponent_id: int = 0,
             "pim": 0, "by_period": {}}
     pstats = {}
     all_shots = []
+    pairs_all, units_all = {}, {}
 
     def prow(pid):
         if pid not in pstats:
@@ -314,6 +352,12 @@ def stats(season_id: int = 0, game_ids: str = "", opponent_id: int = 0,
             r = prow(pid)
             r["sf_on"] += d["sf"]; r["sa_on"] += d["sa"]
             r["gf_on"] += d["gf"]; r["ga_on"] += d["ga"]
+        for k, d in a["pairs"].items():
+            p = pairs_all.setdefault(k, {"toi": 0, "gf": 0, "ga": 0})
+            p["toi"] += d["toi"]; p["gf"] += d["gf"]; p["ga"] += d["ga"]
+        for k, d in a["units"].items():
+            u = units_all.setdefault(k, {"toi": 0, "gf": 0, "ga": 0})
+            u["toi"] += d["toi"]; u["gf"] += d["gf"]; u["ga"] += d["ga"]
 
         for sh in a["shots"]:
             if sh["team"] == "us" and sh["result"] == "goal" and sh["state"] == "pp":
@@ -388,10 +432,27 @@ def stats(season_id: int = 0, game_ids: str = "", opponent_id: int = 0,
         r["s60_5v5"] = round(r["sog_5v5"] * 3600 / r["toi_5v5"], 2) if r["toi_5v5"] else 0
         out.append(r)
     out.sort(key=lambda r: (-r["p"], -r["g"], r["name"]))
+
+    def tag(pid):
+        p = players.get(pid)
+        return f"#{p['number']} {p['name']}" if p else str(pid)
+
+    is_g = lambda pid: (players.get(pid) or {}).get("position", "").upper() == "G"
+    pairs_out = sorted(
+        [{"players": f"{tag(a)} + {tag(b)}", "toi": v["toi"], "gf": v["gf"], "ga": v["ga"]}
+         for (a, b), v in pairs_all.items() if not (is_g(a) or is_g(b))],
+        key=lambda r: -r["toi"])[:30]
+    units_out = sorted(
+        [{"line": key, "players": ", ".join(tag(p) for p in sorted(mem)),
+          "toi": v["toi"], "gf": v["gf"], "ga": v["ga"]}
+         for (key, mem), v in units_all.items()],
+        key=lambda r: (r["line"], -r["toi"]))
+
     return {"games": [{"id": g["id"], "opponent_id": g["opponent_id"], "date": g["date"],
                        "home": g["home"], "score_us": g["score_us"],
                        "score_opp": g["score_opp"]} for g in games],
-            "team": team, "players": out, "shots": all_shots}
+            "team": team, "players": out, "shots": all_shots,
+            "together": {"pairs": pairs_out, "units": units_out}}
 
 
 # ---------------------------------------------------------------- generic CRUD

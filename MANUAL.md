@@ -131,13 +131,36 @@ as even strength), and 5v3 (counted as one PP opportunity).
 penalty, weird situation), force 5v5/PP/PK from the current game time onward;
 choose *auto* to hand control back to the derivation.
 
-**Line change (`L`)** — the fastest panel: type a jersey number, Enter —
-toggles that player on/off the ice (chips show who's on). Repeat for each
-change, then **Enter on the empty field saves** the new on-ice snapshot. `c`
-clears everyone. The current six stay listed under the clock between changes.
+**Lines (once per game, editable any time)** — in the Log tab click **Edit
+lines** (next to the on-ice display) and assign each dressed player to F1–F4 /
+D1–D3 / **G** (the goalie in net). Players you leave unassigned become
+**extras** — spare skaters, dual F/D players, anyone who floats between lines.
+When the coach shuffles lines mid-game, reopen the editor and adjust; it takes
+effect from the next snapshot.
+
+**Line change (`L`)** — opens the on-ice panel showing your lines as rows of
+player buttons (highlighted = currently on ice):
+
+- **Click a player** to toggle him on/off — partial changes, extras jumping in
+  for a regular, anything.
+- **Click a line button** (F1…D3) to swap the whole unit: it benches the other
+  F-lines (or D-pairs) and puts that line on. **Extras are never auto-removed**
+  — if the spare F is playing instead of a 4th-liner, he stays through line
+  swaps until you toggle him off yourself.
+- **The goalie is automatic**: the player marked G is included in every saved
+  snapshot without you touching him. The goalie row has a **pull/return**
+  button for delayed penalties and late-game 6-on-5 (pulled = he's off, and
+  you toggle the extra attacker on like any player); switch goalies via Edit
+  lines.
+- Keyboard-only alternative — everything also works as typed tokens in the
+  input, each followed by Enter: a jersey number toggles that player,
+  `f1`–`f4`/`d1`–`d3` swaps that line, `g` pulls/returns the goalie, `c`
+  clears the skaters. **Enter on the empty field saves** the snapshot. A clean
+  full change is `L`, `f2`, `d1`, Enter.
+
 Ice time accrues between snapshots **only while the game clock runs**, so
 stoppage time never inflates TOI. Log a snapshot at every change you care
-about; more snapshots = more accurate TOI and on-ice stats.
+about; more snapshots = more accurate TOI, on-ice and together stats.
 
 ### 3.5 Fixing mistakes
 
@@ -169,6 +192,10 @@ instead).
   credits, TOI total and split by 5v5/PP/PK, points per 60, 5v5 shots per 60,
   and on-ice shot/goal counts (for/against while the player was on the ice —
   the plus-minus / Corsi building blocks).
+- **Together on ice**: TOI, GF and GA for your **defined line units** (the
+  trio/pair fully on ice together) and for the top **player pairs** by shared
+  ice time — line chemistry straight from the lineup snapshots, no extra
+  logging.
 - **Shot map**: dots colored by result (hover any dot for shooter, state,
   xG) or a density view; filter by team, player, result. All shots are shown
   attacking right.

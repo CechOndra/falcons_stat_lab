@@ -41,7 +41,8 @@ def main():
     # --- game 1 with a scripted timeline (period_len 1200, clock = s remaining) ---
     g1 = post("/api/games", {"season_id": season["id"], "opponent_id": opp["id"],
                              "date": "2025-02-01", "home": 1, "period_len": 1200,
-                             "roster": f'[{a},{b},{c},{D["id"]}]'})["id"]
+                             "roster": f'[{a},{b},{c},{D["id"]}]',
+                             "lines": f'{{"{a}":"F1","{b}":"F1","{c}":"D1","{D["id"]}":"G"}}'})["id"]
     ev(g1, "lineup", "us", 1200, on_ice=f"[{a},{b}]")                       # t=0: A,B on
     ev(g1, "shot", "us", 1140, player_id=a, x=170, y=40, result="on_goal")  # t=60, 5v5
     ev(g1, "penalty", "opp", 1100, pim=2)                                   # t=100 -> our PP
@@ -79,6 +80,14 @@ def main():
     assert (pb["sf_on"], pb["gf_on"]) == (2, 1)
     assert (pc["blk"], pc["pen"], pc["pim"]) == (1, 1, 2)
     assert all(P[k]["gp"] == 1 for k in (a, b, c))
+
+    # together on ice: A+B share 0..200 (pair + defined F1 unit), goal at t=150 counts
+    tg = s["together"]
+    ab = [p for p in tg["pairs"] if "A Shooter" in p["players"] and "B Passer" in p["players"]]
+    assert ab and (ab[0]["toi"], ab[0]["gf"], ab[0]["ga"]) == (200, 1, 0), tg["pairs"]
+    f1 = [u for u in tg["units"] if u["line"] == "F1"]
+    assert f1 and (f1[0]["toi"], f1[0]["gf"]) == (200, 1), tg["units"]
+    assert not any(u["line"] == "D1" for u in tg["units"])  # 1-man "unit" is not a unit
 
     # state / period filters
     pp = client.get(f"/api/stats?game_ids={g1}&state=pp").json()
