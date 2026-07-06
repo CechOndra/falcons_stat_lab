@@ -104,6 +104,17 @@ def seed():
                 for row in csv.DictReader(f):
                     con.execute("INSERT OR IGNORE INTO teams(name) VALUES (?)",
                                 (row["name"].strip(),))
+    if not con.execute("SELECT 1 FROM players LIMIT 1").fetchone():
+        # real names from the team lineup sheet; jersey numbers are placeholders
+        path = os.path.join(HERE, "seed", "roster_template.csv")
+        if os.path.exists(path):
+            with open(path, encoding="utf-8") as f:
+                for row in csv.DictReader(f):
+                    if (row.get("name") or "").strip():
+                        num = (row.get("number") or "").strip()
+                        con.execute("INSERT INTO players(number,name,position) VALUES (?,?,?)",
+                                    (int(num) if num.isdigit() else None,
+                                     row["name"].strip(), (row.get("position") or "").strip()))
     con.commit()
     con.close()
 

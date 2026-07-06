@@ -29,7 +29,7 @@ def main():
     A = post("/api/players", {"number": 17, "name": "A Shooter", "position": "F"})
     B = post("/api/players", {"number": 9, "name": "B Passer", "position": "F"})
     C = post("/api/players", {"number": 4, "name": "C Blocker", "position": "D"})
-    D = post("/api/players", {"number": 30, "name": "D Goalie", "position": "G"})
+    D = post("/api/players", {"number": 33, "name": "D Goalie", "position": "G"})
     a, b, c = A["id"], B["id"], C["id"]
 
     # CSV roster import

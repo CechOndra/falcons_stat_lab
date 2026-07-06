@@ -7,60 +7,74 @@
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='13' font-size='13'>🦅</text></svg>">
 <style>
 :root{
-  --page:#f9f9f7; --surface:#fcfcfb; --ink:#0b0b0b; --ink2:#52514e; --muted:#898781;
+  --page:#f9f9f7; --surface:#fcfcfb; --ink:#0b0b0b; --ink2:#52514e; --ink3:#6f6e69; --muted:#898781;
   --grid:#e1e0d9; --axis:#c3c2b7; --border:rgba(11,11,11,.10);
   --us:#2a78d6; --opp:#e34948; --miss:#eda100; --goal:#008300; --block:#4a3aa7;
+  --ring:color-mix(in oklab, var(--us) 25%, transparent);
 }
 @media (prefers-color-scheme: dark){
   :root{
-    --page:#0d0d0d; --surface:#1a1a19; --ink:#ffffff; --ink2:#c3c2b7; --muted:#898781;
+    --page:#0d0d0d; --surface:#1a1a19; --ink:#ffffff; --ink2:#c3c2b7; --ink3:#a5a49c; --muted:#898781;
     --grid:#2c2c2a; --axis:#383835; --border:rgba(255,255,255,.10);
     --us:#3987e5; --opp:#e66767; --miss:#c98500; --goal:#008300; --block:#9085e9;
   }
 }
 *{box-sizing:border-box}
 [hidden]{display:none !important}
-body{margin:0;font:14px/1.45 system-ui,-apple-system,"Segoe UI",sans-serif;background:var(--page);color:var(--ink)}
-nav{display:flex;gap:4px;padding:8px 14px;border-bottom:1px solid var(--grid);background:var(--surface);position:sticky;top:0;z-index:5}
-nav button{background:none;border:0;padding:7px 12px;font:inherit;color:var(--ink2);cursor:pointer;border-radius:6px}
+body{margin:0;font:14px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif;background:var(--page);color:var(--ink);-webkit-font-smoothing:antialiased}
+button,input,select,textarea{transition:background-color .15s ease-out,border-color .15s ease-out,color .15s ease-out,box-shadow .15s ease-out}
+@media (prefers-reduced-motion: reduce){*,*::before,*::after{transition:none !important;animation:none !important}}
+:focus-visible{outline:2px solid var(--us);outline-offset:1px}
+nav{display:flex;gap:2px;align-items:center;padding:8px 16px;border-bottom:1px solid var(--grid);background:var(--surface);position:sticky;top:0;z-index:5}
+nav button{background:none;border:0;padding:7px 12px;font:inherit;font-weight:500;color:var(--ink2);cursor:pointer;border-radius:7px}
+nav button:hover{background:color-mix(in oklab, var(--ink) 5%, transparent);color:var(--ink)}
 nav button.on{background:var(--us);color:#fff}
-nav .brand{font-weight:700;margin-right:12px;align-self:center}
-main{padding:14px;max-width:1280px;margin:0 auto}
+nav .brand{font-weight:700;margin-right:14px}
+main{padding:16px;max-width:1280px;margin:0 auto}
 section.tab{display:none} section.tab.on{display:block}
-h2{font-size:17px;margin:6px 0 10px} h3{font-size:14px;margin:8px 0 6px}
-.card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:12px}
-table{border-collapse:collapse;width:100%;font-variant-numeric:tabular-nums}
-th,td{text-align:left;padding:4px 8px;border-bottom:1px solid var(--grid);white-space:nowrap}
-th{color:var(--muted);font-weight:600;font-size:12px}
+h2{font-size:17px;font-weight:600;margin:4px 0 12px}
+h3{font-size:14px;font-weight:650;margin:10px 0 8px}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin-bottom:12px}
+table{border-collapse:collapse;width:100%;font-variant-numeric:tabular-nums;font-size:13.5px}
+th{text-align:left;padding:6px 8px;border-bottom:1px solid var(--axis);color:var(--ink3);font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.04em;white-space:nowrap}
+td{text-align:left;padding:5px 8px;border-bottom:1px solid var(--grid);white-space:nowrap}
 .tblwrap{overflow-x:auto}
-input,select,textarea{font:inherit;color:var(--ink);background:var(--surface);border:1px solid var(--axis);border-radius:6px;padding:5px 7px}
-input.num{width:56px}
-button{font:inherit;cursor:pointer;border-radius:6px;border:1px solid var(--axis);background:var(--surface);color:var(--ink);padding:5px 10px}
-button.pri{background:var(--us);border-color:var(--us);color:#fff}
-button.ghost{border:0;background:none;color:var(--ink2);padding:2px 6px}
-.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:6px 0}
-.hint{color:var(--muted);font-size:12px}
-kbd{background:var(--grid);border-radius:4px;padding:1px 5px;font-size:12px;font-family:inherit}
-dialog{background:var(--surface);color:var(--ink);border:1px solid var(--border);border-radius:12px;padding:16px;max-width:640px}
-dialog::backdrop{background:rgba(0,0,0,.45)}
+input,select,textarea{font:inherit;color:var(--ink);background:var(--surface);border:1px solid var(--axis);border-radius:7px;padding:5px 8px}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--us);box-shadow:0 0 0 3px var(--ring)}
+input::placeholder,textarea::placeholder{color:var(--ink3)}
+input.num{width:58px}
+button{font:inherit;cursor:pointer;border-radius:7px;border:1px solid var(--axis);background:var(--surface);color:var(--ink);padding:5px 11px}
+button:hover{background:color-mix(in oklab, var(--ink) 4%, var(--surface));border-color:var(--ink3)}
+button:active{background:color-mix(in oklab, var(--ink) 8%, var(--surface))}
+button:disabled{opacity:.5;cursor:default}
+button.pri{background:var(--us);border-color:var(--us);color:#fff;font-weight:600}
+button.pri:hover{background:color-mix(in oklab, var(--us) 86%, var(--ink));border-color:color-mix(in oklab, var(--us) 86%, var(--ink))}
+button.ghost{border-color:transparent;background:none;color:var(--ink2);padding:3px 7px}
+button.ghost:hover{background:color-mix(in oklab, var(--ink) 6%, transparent);color:var(--ink)}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:8px 0}
+.hint{color:var(--ink3);font-size:12px}
+kbd{background:var(--page);border:1px solid var(--axis);border-bottom-width:2px;border-radius:4px;padding:0 5px;font-size:12px;font-family:inherit}
+dialog{background:var(--surface);color:var(--ink);border:1px solid var(--border);border-radius:12px;padding:18px;max-width:640px;box-shadow:0 16px 48px rgba(0,0,0,.28)}
+dialog::backdrop{background:rgba(0,0,0,.5)}
+dialog h3{margin-top:0}
 .chips{display:flex;gap:6px;flex-wrap:wrap;min-height:30px}
-.lubtn{padding:4px 9px;margin:2px}
+.chip{background:var(--grid);border-radius:14px;padding:3px 10px;font-weight:600;font-size:13px}
+.lubtn{padding:4px 10px;margin:2px}
 .lubtn.on{background:var(--us);border-color:var(--us);color:#fff}
-.linebtn{font-weight:700;min-width:40px}
-.chip{background:var(--grid);border-radius:14px;padding:3px 10px;font-weight:600}
+.linebtn{font-weight:700;min-width:42px}
 .grid2{display:grid;grid-template-columns:1fr 340px;gap:12px}
 @media(max-width:900px){.grid2{grid-template-columns:1fr}}
 video{width:100%;max-height:56vh;background:#000;border-radius:8px}
-.clock{font-size:30px;font-weight:700}
-.clock small{font-size:14px;color:var(--muted);font-weight:400}
+.clock{font-size:30px;font-weight:700;font-variant-numeric:tabular-nums}
+.clock small{font-size:13px;color:var(--ink3);font-weight:500}
 .stopped{color:var(--opp)}
 #evlog{max-height:44vh;overflow-y:auto}
-#evlog tr{cursor:pointer} #evlog tr:hover{background:var(--grid)}
+#evlog tr{cursor:pointer} #evlog tr:hover td{background:color-mix(in oklab, var(--ink) 4%, var(--surface))}
 #evlog td:nth-child(2){white-space:normal}
-.tiles{display:flex;gap:10px;flex-wrap:wrap}
-.tile{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:10px 16px;min-width:104px}
-.tile b{display:block;font-size:24px;font-weight:700}
-.tile span{color:var(--muted);font-size:12px}
+.tiles{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px}
+.tile{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:10px 16px;min-width:110px}
+.tile b{display:block;font-size:26px;font-weight:700;font-variant-numeric:tabular-nums;line-height:1.25}
+.tile span{color:var(--ink3);font-size:12px}
 .legend{display:flex;gap:14px;align-items:center;font-size:12px;color:var(--ink2);margin:6px 0}
 .dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:4px;vertical-align:-1px}
 .bars .brow{display:grid;grid-template-columns:34px 1fr 1fr;gap:8px;align-items:center;margin:4px 0}
@@ -133,7 +147,7 @@ a{color:var(--us)}
     </div>
     <div>
       <div class="card">
-        <div class="clock"><span id="ckPeriod">P1</span> <span id="ckTime">--:--</span> <small id="ckState">not calibrated — press C</small></div>
+        <div class="clock"><span id="ckPeriod">P1</span> <span id="ckTime">--:--</span> <small id="ckState">not calibrated: press C</small></div>
         <div class="hint">On ice: <span id="onIceNow">—</span> · <button class="ghost" id="btnLines">Edit lines</button></div>
       </div>
       <div class="card">
@@ -223,7 +237,7 @@ a{color:var(--us)}
   </div>
   <div class="card"><h2>Teams (opponents)</h2><div id="teamsList"></div>
     <div class="row"><input id="tName" placeholder="Team name"><button class="pri" id="tAdd">Add team</button></div>
-    <div class="hint">Seeded from <code>seed/teams_template.csv</code> — edit freely; the league site (univerzitnihokej.cz) is the source of truth for names.</div>
+    <div class="hint">Seeded from <code>seed/teams_template.csv</code>; edit freely, the league site (univerzitnihokej.cz) is the source of truth for names.</div>
   </div>
   <div class="card"><h2>Keyboard shortcuts</h2>
     <div class="hint">Defaults documented in the <a href="/manual" target="_blank">manual</a>. To change them, edit the <code>KEYS</code> map at the top of the script in <code>static/index.html</code>.</div>
@@ -245,7 +259,7 @@ a{color:var(--us)}
 <dialog id="dlgShot">
   <h3 id="shTitle">Shot</h3>
   <svg id="shotRink" class="rink" viewBox="0 0 200 85"></svg>
-  <div class="hint">Click the shot location — shooter always attacks the <b>right</b> net. <span id="shLocMsg" class="err">location required</span></div>
+  <div class="hint">Click the shot location. The shooter always attacks the <b>right</b> net. <span id="shLocMsg" class="err">location required</span></div>
   <div class="row" id="rowShooter">Shooter #<input id="shShooter" class="num" inputmode="numeric"><span id="shShooterName" class="hint"></span></div>
   <div class="row">Result <select id="shResult">
     <option value="on_goal">on goal (saved)</option><option value="missed">missed</option>
@@ -288,7 +302,7 @@ a{color:var(--us)}
   <h3>Lines for this game</h3>
   <div id="linesList" style="max-height:55vh;overflow-y:auto"></div>
   <div class="hint">Unassigned players show as <b>extras</b> in the line-change panel (line buttons never remove them).
-    Edit any time — mid-game shuffles included. <b>G</b> marks the goalie in net.</div>
+    Edit any time, mid-game shuffles included. <b>G</b> marks the goalie in net.</div>
   <div class="row"><button class="pri save" id="linesSave">Save (Enter)</button></div>
 </dialog>
 
@@ -365,7 +379,8 @@ function renderRoster(){
       <td><input size="2" value="${esc(p.position)}" data-pf="position" data-pid="${p.id}"></td>
       <td><input value="${esc(p.photo)}" data-pf="photo" data-pid="${p.id}" placeholder="URL"></td>
       <td><input type="checkbox" ${p.active?"checked":""} data-pf="active" data-pid="${p.id}"></td>
-      <td><button class="ghost" data-del-p="${p.id}">✕</button></td></tr>`).join("");
+      <td><button class="ghost" data-del-p="${p.id}">✕</button></td></tr>`).join("")
+    ||`<tr><td colspan="6" class="hint">Roster is empty. Add players below or import a CSV.</td></tr>`;
   $$("[data-pf]").forEach(el=>el.onchange=async()=>{
     const v = el.type==="checkbox"?(el.checked?1:0):el.value;
     await api("/players/"+el.dataset.pid,"PUT",{[el.dataset.pf]:v});
@@ -421,7 +436,8 @@ function renderGames(){
       <td>${g.home?"H":"A"}</td><td>${g.score_us}:${g.score_opp}</td>
       <td><button class="pri" data-open="${g.id}">Open / log</button>
           <button data-editg="${g.id}">Edit</button>
-          <button class="ghost" data-delg="${g.id}">✕</button></td></tr>`).join("");
+          <button class="ghost" data-delg="${g.id}">✕</button></td></tr>`).join("")
+    ||`<tr><td colspan="6" class="hint">No games yet. Create the first one above.</td></tr>`;
   $$("[data-open]").forEach(b=>b.onclick=()=>openGame(+b.dataset.open));
   $$("[data-delg]").forEach(b=>b.onclick=async()=>{
     if(confirm("Delete game AND all its events?")){
@@ -478,7 +494,7 @@ function gameClock(){
   return Math.max(0, cal.clock - (video.currentTime - cal.videoT));
 }
 function setCkState(){
-  $("#ckState").textContent = !cal ? "not calibrated — press C" : (cal.running?"running":"STOPPED (K to run)");
+  $("#ckState").textContent = !cal ? "not calibrated: press C" : (cal.running?"running":"STOPPED (K to run)");
   $("#ckState").className = cal&&!cal.running ? "stopped" : "";
 }
 setInterval(()=>{
@@ -516,7 +532,7 @@ async function openGame(id){
   const tmap=Object.fromEntries(TEAMS.map(t=>[t.id,t.name]));
   $("#lgTitle").textContent = `${G.home?"":"@ "}${tmap[G.opponent_id]??"?"} ${G.date??""}`;
   const saved=JSON.parse(G.video_files||"[]");
-  $("#vprev").innerHTML = saved.length?`Re-select video file(s) for this game: <b>${saved.map(s=>esc(s.name)).join(", ")}</b> — resumes at ${mmss(G.last_video_pos||0)}`:"Pick the game video file(s) (they stay on disk, nothing is uploaded).";
+  $("#vprev").innerHTML = saved.length?`Re-select video file(s) for this game: <b>${saved.map(s=>esc(s.name)).join(", ")}</b>; resumes at ${mmss(G.last_video_pos||0)}`:"Pick the game video file(s) (they stay on disk, nothing is uploaded).";
   $("#vlist").innerHTML="";video.removeAttribute("src");video.load();
   $("#noGame").hidden=true;$("#logUI").hidden=false;
   setCkState(); renderLog(); renderOnIce(); showTab("log");
@@ -531,7 +547,7 @@ function evText(e){
   const t={shot:"Shot",penalty:"Penalty",lineup:"Line",override:"Override"}[e.type];
   if(e.type==="shot"){
     const res=e.result==="goal"?"🥅 GOAL":e.result.replace("_"," ");
-    let s=`${e.team==="us"?(e.player_id?pname(e.player_id):"Falcons"):"Opponent"} — ${res}`;
+    let s=`${e.team==="us"?(e.player_id?pname(e.player_id):"Falcons"):"Opponent"} · ${res}`;
     if(e.result==="goal"&&(e.assist1_id||e.assist2_id)) s+=` (A: ${[e.assist1_id,e.assist2_id].filter(Boolean).map(pname).join(", ")})`;
     if(e.blocker_id) s+=` · blk ${pname(e.blocker_id)}`;
     if(e.screen_id) s+=` · screen ${pname(e.screen_id)}`;
@@ -807,8 +823,8 @@ function renderLu(){
   if(gid){const p=PBYID()[gid];
     html+=`<div class="row"><span class="hint" style="min-width:40px">G</span>
       <span class="chip">${p?p.number+" "+esc(p.name):gid}</span>
-      <button class="lubtn ${goaliePulled?"":"on"}" id="luPull">${goaliePulled?"PULLED — click to return":"in net — click to pull"}</button></div>`;}
-  else html+=`<div class="row hint">no goalie set — assign one in “Edit lines” (G)</div>`;
+      <button class="lubtn ${goaliePulled?"":"on"}" id="luPull">${goaliePulled?"PULLED · click to return":"in net · click to pull"}</button></div>`;}
+  else html+=`<div class="row hint">no goalie set: assign one in “Edit lines” (G)</div>`;
   $("#luGrid").innerHTML=html;
   $$("[data-lu-p]").forEach(b=>b.onclick=()=>{const id=+b.dataset.luP;
     onIce.has(id)?onIce.delete(id):onIce.add(id);renderLu();});
@@ -952,7 +968,8 @@ function renderDash(){
     DASH.players.map(p=>`<tr><td>${p.number??""}</td><td>${esc(p.name)}</td><td>${p.gp}</td><td>${p.g}</td><td>${p.a}</td><td><b>${p.p}</b></td>
       <td>${p.sog}</td><td>${p.att}</td><td>${p.sh_pct}</td><td>${p.xg}</td><td>${p.blk}</td><td>${p.pen}</td><td>${p.pim}</td><td>${p.screens}</td>
       <td>${TOI(p.toi)}</td><td>${TOI(p.toi_5v5)}</td><td>${TOI(p.toi_pp)}</td><td>${TOI(p.toi_pk)}</td>
-      <td>${p.p60}</td><td>${p.s60_5v5}</td><td>${p.sf_on}</td><td>${p.sa_on}</td><td>${p.gf_on}</td><td>${p.ga_on}</td></tr>`).join("");
+      <td>${p.p60}</td><td>${p.s60_5v5}</td><td>${p.sf_on}</td><td>${p.sa_on}</td><td>${p.gf_on}</td><td>${p.ga_on}</td></tr>`).join("")
+    ||`<tr><td colspan="24" class="hint">No data in the current filter.</td></tr>`;
   const tg=DASH.together||{units:[],pairs:[]};
   $("#unitsTbl").innerHTML="<tr><th>Line</th><th>Players</th><th>TOI together</th><th>GF</th><th>GA</th></tr>"+
     (tg.units.map(u=>`<tr><td>${esc(u.line)}</td><td>${esc(u.players)}</td><td>${TOI(u.toi)}</td><td>${u.gf}</td><td>${u.ga}</td></tr>`).join("")
