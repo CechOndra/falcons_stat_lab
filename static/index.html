@@ -199,6 +199,8 @@ a{color:var(--us)}
       <select id="hPlayer"><option value="0">All players</option></select>
       <select id="hResult"><option value="">All results</option><option value="goal">Goals</option><option value="on_goal">On goal</option><option value="missed">Missed</option><option value="blocked">Blocked</option></select>
       <select id="hMode"><option value="dots">Dots</option><option value="density">Density</option></select>
+      <select id="hDist"><option value="">Any distance</option><option value="0-5">0–5 m from net</option>
+        <option value="5-10">5–10 m</option><option value="10-18">10–18 m</option><option value="18-99">18 m +</option></select>
     </div>
     <div class="legend" id="hLegend">
       <span><span class="dot" style="background:var(--goal)"></span>Goal</span>
@@ -1090,14 +1092,16 @@ function renderDash(){
      ||`<tr><td colspan="4" class="hint">no lineup data</td></tr>`);
   drawMaps();
 }
-["hTeam","hPlayer","hResult","hMode"].forEach(id=>$("#"+id).onchange=drawMaps);
+["hTeam","hPlayer","hResult","hMode","hDist"].forEach(id=>$("#"+id).onchange=drawMaps);
 const RESCOLOR={goal:"var(--goal)",on_goal:"var(--us)",missed:"var(--miss)",blocked:"var(--block)"};
 function drawMaps(){
   if(!DASH)return;
   const team=$("#hTeam").value, pid=+$("#hPlayer").value, res=$("#hResult").value, mode=$("#hMode").value;
-  const shots=DASH.shots.filter(s=>s.team===team&&(!pid||s.player_id===pid)&&(!res||s.result===res)&&s.x!=null);
+  const [dLo,dHi]=$("#hDist").value?$("#hDist").value.split("-").map(Number):[0,Infinity];
+  const shots=DASH.shots.filter(s=>s.team===team&&(!pid||s.player_id===pid)&&(!res||s.result===res)
+    &&s.x!=null&&s.dist_m>=dLo&&s.dist_m<dHi);
   const marks=shots.map(s=>{
-    const tip=`<title>${s.result==="goal"?"GOAL":s.result} · ${s.player_id?esc((PBYID()[s.player_id]||{}).name||""):"opponent"} · P${s.period} · ${s.state}${s.slot?" · slot":""} · xG ${s.xg??"—"}${s.xgot?` · xGOT ${s.xgot}`:""}</title>`;
+    const tip=`<title>${s.result==="goal"?"GOAL":s.result} · ${s.player_id?esc((PBYID()[s.player_id]||{}).name||""):"opponent"} · P${s.period} · ${s.state}${s.slot?" · slot":""} · ${s.dist_m} m · xG ${s.xg??"—"}${s.xgot?` · xGOT ${s.xgot}`:""}</title>`;
     if(mode==="density")
       return `<circle cx="${s.x}" cy="${s.y}" r="7" fill="${team==="us"?"var(--us)":"var(--opp)"}" opacity="0.16">${tip}</circle>`;
     const goal=s.result==="goal";

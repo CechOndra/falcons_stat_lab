@@ -278,6 +278,8 @@ def analyze_game(game, evs):
             e["state"] = state_at(e["t"])
         e["xg"] = xg_value(e["x"], e["y"])
         e["slot"] = in_slot(e["x"], e["y"])
+        e["dist_m"] = round(_dist_angle(e["x"], e["y"])[0] * 0.3048, 1) \
+            if e["x"] is not None else None
         e["xgot"] = xgot_value(e["x"], e["y"], e["net_x"], e["net_y"]) \
             if e["result"] in ("goal", "on_goal") else None
 
@@ -438,7 +440,8 @@ def stats(season_id: int = 0, game_ids: str = "", opponent_id: int = 0,
                 continue
             all_shots.append({k: sh[k] for k in
                               ("game_id", "team", "player_id", "x", "y", "result",
-                               "net_x", "net_y", "state", "period", "xg", "xgot", "slot")})
+                               "net_x", "net_y", "state", "period", "xg", "xgot",
+                               "slot", "dist_m")})
             for_us = sh["team"] == "us"
             on_goal = sh["result"] in ("goal", "on_goal")
             team["att_f" if for_us else "att_a"] += 1

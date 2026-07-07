@@ -236,6 +236,16 @@ true aspect ratio, so nothing is distorted. Reference points:
   every rink diagram, and each shot gets an automatic in-slot tag (team
   table: "Slot SOG"; shot-map tooltips).
 
+**Everything you actually see is in meters.** Feet are only the internal
+grid; each shot's distance to the net is shown in meters in the tooltips and
+drives the shot-map distance filter (0–5 / 5–10 / 10–18 / 18+ m). For
+orientation: the diagram is a 61 × 26 m rink (NHL proportions), net 3.4 m
+from the end boards, blue lines ~22.9 m in, face-off dots ~6.1 m out from
+the goal line, slot reaching ~10.7 m. If your rink is the wider European
+30 m, clicks are proportional so heat maps stay right; absolute distances
+near the side boards run slightly short — treat the meter values as
+approximate.
+
 ### The xG and xGOT models (assumptions & sources)
 
 **xG** — every located shot attempt gets

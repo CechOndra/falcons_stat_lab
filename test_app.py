@@ -70,6 +70,8 @@ def main():
     assert (t["slot_f"], t["slot_a"]) == (2, 1)  # house SOG for/against
     assert t["xgot_f"] > 0 and t["xgot_a"] == 0  # only the placed PP goal has xGOT
     assert len(s["shots"]) == 6 and all(0 < sh["xg"] < 1 for sh in s["shots"])
+    # distances reported in meters: shot from (170,40) is ~5.8 m out
+    assert any(abs(sh["dist_m"] - 5.8) < 0.2 for sh in s["shots"])
 
     P = {p["player_id"]: p for p in s["players"]}
     pa, pb, pc = P[a], P[b], P[c]
