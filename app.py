@@ -46,7 +46,7 @@ CREATE TABLE IF NOT EXISTS games(
 CREATE TABLE IF NOT EXISTS events(
   id INTEGER PRIMARY KEY,
   game_id INTEGER NOT NULL REFERENCES games(id),
-  type TEXT NOT NULL CHECK(type IN ('shot','penalty','lineup','override')),
+  type TEXT NOT NULL CHECK(type IN ('shot','penalty','lineup','override','marker')),
   team TEXT DEFAULT 'us' CHECK(team IN ('us','opp')),
   period INTEGER NOT NULL,
   clock INTEGER NOT NULL,        -- seconds REMAINING in the period, as on the scoreboard
@@ -59,6 +59,7 @@ CREATE TABLE IF NOT EXISTS events(
   pim REAL, zone TEXT CHECK(zone IN ('off','neu','def')),
   on_ice TEXT,                   -- ponytail: JSON player-id list; join table if per-player SQL ever needed
   override TEXT,                 -- '5v5'|'pp'|'pk'|'auto' manual game-state override
+  note TEXT DEFAULT '',          -- free text; markers use it ("faceoff", "check this")
   created_at TEXT DEFAULT (datetime('now')));
 CREATE INDEX IF NOT EXISTS ev_game ON events(game_id);
 """
@@ -75,7 +76,7 @@ COLS = {
     "events": ["game_id", "type", "team", "period", "clock", "video_ts", "video_idx",
                "player_id", "x", "y", "result", "blocker_id", "assist1_id",
                "assist2_id", "net_x", "net_y", "screen_id", "pim", "zone",
-               "on_ice", "override"],
+               "on_ice", "override", "note"],
 }
 
 
@@ -93,6 +94,17 @@ def seed():
         con.execute("ALTER TABLE games ADD COLUMN lines TEXT DEFAULT '{}'")
     except sqlite3.OperationalError:
         pass
+    row = con.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='events'").fetchone()
+    if row and "'marker'" not in row["sql"]:  # rebuild events for the marker type + note column
+        cols = ("game_id,type,team,period,clock,video_ts,video_idx,player_id,x,y,result,"
+                "blocker_id,assist1_id,assist2_id,net_x,net_y,screen_id,pim,zone,on_ice,"
+                "override,created_at")
+        con.execute("PRAGMA foreign_keys=OFF")
+        con.executescript("ALTER TABLE events RENAME TO events_old;" + SCHEMA)
+        con.execute(f"INSERT INTO events(id,{cols}) SELECT id,{cols} FROM events_old")
+        con.execute("DROP TABLE events_old")
+        con.commit()
+        con.execute("PRAGMA foreign_keys=ON")
     if not con.execute("SELECT 1 FROM seasons LIMIT 1").fetchone():
         con.execute("INSERT INTO seasons(name) VALUES ('2025/26')")
     if not con.execute("SELECT 1 FROM users LIMIT 1").fetchone():
@@ -157,21 +169,60 @@ def me():
 
 
 
-# ---------------------------------------------------------------- xG model
-# ponytail: naive logistic xG from shot distance (ft) and angle off the net axis
-# (rad). Coefficients hand-tuned for amateur hockey: ~35% point blank in the
-# slot, ~5% from the circles, ~1% from the blue line. Swap this function to
-# upgrade the model - it is the only place xG is computed.
+# ---------------------------------------------------------------- xG / xGOT
+# Logistic distance+angle models, least-squares fitted to published NHL
+# location values (league SOG sh% ~7.2% 22-23; crease ~15-25%; slot 10-15%;
+# perimeter 2-4%; slot = 15-30 ft / 20-40 deg). Sources in MANUAL.md.
+# Swap these functions to upgrade the models - the only place xG lives.
 NET_X, NET_Y = 189.0, 42.5
+
+# NHL "house" / home plate: posts -> faceoff dots -> across the top of circles
+HOUSE = [(189, 39.5), (169, 20.5), (154, 20.5), (154, 64.5), (169, 64.5), (189, 45.5)]
+
+
+def in_slot(x, y):
+    if x is None or y is None:
+        return False
+    inside = False
+    for i in range(len(HOUSE)):
+        x1, y1 = HOUSE[i]
+        x2, y2 = HOUSE[(i + 1) % len(HOUSE)]
+        if (y1 > y) != (y2 > y) and x < (x2 - x1) * (y - y1) / (y2 - y1) + x1:
+            inside = not inside
+    return inside
+
+
+def _dist_angle(x, y):
+    d = math.hypot(NET_X - x, NET_Y - y)
+    a = math.atan2(abs(y - NET_Y), max(NET_X - x, 0.1))
+    return d, a
 
 
 def xg_value(x, y):
+    """P(goal | shot attempt from x,y). Fit: crease .20, slot .10, circles .04,
+    point .018, sharp-angle close .045."""
     if x is None or y is None:
         return None
-    d = math.hypot(NET_X - x, NET_Y - y)
-    a = math.atan2(abs(y - NET_Y), max(NET_X - x, 0.1))
-    z = 0.9 - 0.10 * d - 1.3 * a
+    d, a = _dist_angle(x, y)
+    z = -0.895 - 0.050 * d - 1.355 * a
     return round(1 / (1 + math.exp(-z)), 4)
+
+
+def xgot_value(x, y, net_x, net_y):
+    """P(goal | shot ON GOAL from x,y aimed at net_x,net_y % across the net).
+    Base: on-goal logistic (crease .25, slot .13, circles .055, point .025).
+    Placement factor from published shot-target effects: corners and upper net
+    beat center mass, mild five-hole bump; goalie chest/center is worst."""
+    if None in (x, y, net_x, net_y):
+        return None
+    d, a = _dist_angle(x, y)
+    base = 1 / (1 + math.exp(0.633 + 0.048 * d + 1.328 * a))
+    h = abs(net_x - 50) / 50          # 0 = center, 1 = post
+    v = 1 - net_y / 100               # 0 = along the ice, 1 = crossbar
+    m = 0.35 + 1.35 * h ** 1.5 + 0.55 * v
+    if h < 0.2 and net_y > 78:        # five-hole
+        m += 0.45
+    return round(min(1.0, base * min(m, 2.6)), 4)
 
 
 # ---------------------------------------------------------------- stats engine
@@ -226,6 +277,9 @@ def analyze_game(game, evs):
         if "state" not in e:
             e["state"] = state_at(e["t"])
         e["xg"] = xg_value(e["x"], e["y"])
+        e["slot"] = in_slot(e["x"], e["y"])
+        e["xgot"] = xgot_value(e["x"], e["y"], e["net_x"], e["net_y"]) \
+            if e["result"] in ("goal", "on_goal") else None
 
     # contiguous game-state segments (for TOI split and PP/PK opportunity counts)
     bounds = sorted({0, game_end} | {iv["s"] for iv in ivs} | {iv["e"] for iv in ivs}
@@ -329,7 +383,8 @@ def stats(season_id: int = 0, game_ids: str = "", opponent_id: int = 0,
     players = {r["id"]: dict(r) for r in con.execute("SELECT * FROM players")}
 
     team = {"gf": 0, "ga": 0, "sog_f": 0, "sog_a": 0, "att_f": 0, "att_a": 0,
-            "xg_f": 0.0, "xg_a": 0.0, "pp_opps": 0, "ppg": 0, "sh_times": 0,
+            "xg_f": 0.0, "xg_a": 0.0, "xgot_f": 0.0, "xgot_a": 0.0,
+            "slot_f": 0, "slot_a": 0, "pp_opps": 0, "ppg": 0, "sh_times": 0,
             "ppga": 0, "pp_sog": 0, "pens_zone": {"off": 0, "neu": 0, "def": 0},
             "pim": 0, "by_period": {}}
     pstats = {}
@@ -342,7 +397,7 @@ def stats(season_id: int = 0, game_ids: str = "", opponent_id: int = 0,
             pstats[pid] = {"player_id": pid, "number": p.get("number"),
                            "name": p.get("name", f"#{pid}"), "position": p.get("position", ""),
                            "gp": 0, "g": 0, "a": 0, "sog": 0, "att": 0, "blk": 0,
-                           "pen": 0, "pim": 0, "screens": 0, "xg": 0.0,
+                           "pen": 0, "pim": 0, "screens": 0, "xg": 0.0, "xgot": 0.0,
                            "toi": 0, "toi_5v5": 0, "toi_pp": 0, "toi_pk": 0,
                            "sf_on": 0, "sa_on": 0, "gf_on": 0, "ga_on": 0,
                            "sog_5v5": 0}
@@ -383,12 +438,16 @@ def stats(season_id: int = 0, game_ids: str = "", opponent_id: int = 0,
                 continue
             all_shots.append({k: sh[k] for k in
                               ("game_id", "team", "player_id", "x", "y", "result",
-                               "net_x", "net_y", "state", "period", "xg")})
+                               "net_x", "net_y", "state", "period", "xg", "xgot", "slot")})
             for_us = sh["team"] == "us"
             on_goal = sh["result"] in ("goal", "on_goal")
             team["att_f" if for_us else "att_a"] += 1
             if sh["xg"]:
                 team["xg_f" if for_us else "xg_a"] += sh["xg"]
+            if sh["xgot"]:
+                team["xgot_f" if for_us else "xgot_a"] += sh["xgot"]
+            if sh["slot"] and on_goal:
+                team["slot_f" if for_us else "slot_a"] += 1
             bp = team["by_period"].setdefault(sh["period"], {"sf": 0, "sa": 0})
             if on_goal:
                 team["sog_f" if for_us else "sog_a"] += 1
@@ -400,6 +459,8 @@ def stats(season_id: int = 0, game_ids: str = "", opponent_id: int = 0,
                 r["att"] += 1
                 if sh["xg"]:
                     r["xg"] += sh["xg"]
+                if sh["xgot"]:
+                    r["xgot"] += sh["xgot"]
                 if on_goal:
                     r["sog"] += 1
                     if sh["state"] == "5v5":
@@ -433,12 +494,15 @@ def stats(season_id: int = 0, game_ids: str = "", opponent_id: int = 0,
     team["shots_per_pp"] = round(team["pp_sog"] / team["pp_opps"], 2) if team["pp_opps"] else 0
     team["xg_f"] = round(team["xg_f"], 2)
     team["xg_a"] = round(team["xg_a"], 2)
+    team["xgot_f"] = round(team["xgot_f"], 2)
+    team["xgot_a"] = round(team["xgot_a"], 2)
 
     out = []
     for r in pstats.values():
         r["p"] = r["g"] + r["a"]
         r["sh_pct"] = round(100 * r["g"] / r["sog"], 1) if r["sog"] else 0
         r["xg"] = round(r["xg"], 2)
+        r["xgot"] = round(r["xgot"], 2)
         r["p60"] = round(r["p"] * 3600 / r["toi"], 2) if r["toi"] else 0
         r["s60_5v5"] = round(r["sog_5v5"] * 3600 / r["toi_5v5"], 2) if r["toi_5v5"] else 0
         out.append(r)

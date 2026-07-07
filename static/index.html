@@ -151,7 +151,10 @@ a{color:var(--us)}
         <div class="hint">On ice: <span id="onIceNow">—</span> · <button class="ghost" id="btnLines">Edit lines</button></div>
       </div>
       <div class="card">
-        <h3>Event log</h3>
+        <div class="row"><h3 style="margin:0">Event log</h3>
+          <span class="hint" id="evCount"></span>
+          <select id="evFilter" style="margin-left:auto"><option value="">All events</option><option value="todo">Needs info</option></select>
+        </div>
         <div id="evlog" class="tblwrap"><table id="evTbl"></table></div>
       </div>
     </div>
@@ -206,6 +209,9 @@ a{color:var(--us)}
     </div>
     <svg id="heatmap" class="rink" viewBox="0 0 200 85" style="cursor:default"></svg>
     <h3>Goal-mouth placement <span class="hint">(shots with recorded net location, shooter's view)</span></h3>
+    <div class="legend"><span><span class="dot" style="background:var(--goal)"></span>Goal</span>
+      <span><span class="dot" style="background:var(--us)"></span>Saved</span>
+      <span class="hint">goalie silhouette for orientation · hover for xGOT</span></div>
     <svg id="netmap" viewBox="-6 -6 84 60" style="max-width:340px;display:block;background:var(--surface);border:1px solid var(--grid);border-radius:8px"></svg>
   </div>
 </section>
@@ -240,7 +246,9 @@ a{color:var(--us)}
     <div class="hint">Seeded from <code>seed/teams_template.csv</code>; edit freely, the league site (univerzitnihokej.cz) is the source of truth for names.</div>
   </div>
   <div class="card"><h2>Keyboard shortcuts</h2>
-    <div class="hint">Defaults documented in the <a href="/manual" target="_blank">manual</a>. To change them, edit the <code>KEYS</code> map at the top of the script in <code>static/index.html</code>.</div>
+    <div class="tblwrap"><table id="keysTbl"></table></div>
+    <div class="row"><button id="keysReset">Reset to defaults</button>
+      <span class="hint" id="keysMsg">Click Rebind, then press the new key. Saved in this browser.</span></div>
   </div>
 </section>
 </main>
@@ -306,6 +314,19 @@ a{color:var(--us)}
   <div class="row"><button class="pri save" id="linesSave">Save (Enter)</button></div>
 </dialog>
 
+<dialog id="dlgMark">
+  <h3>Marker</h3>
+  <div class="row">Note <input id="markNote" placeholder="e.g. faceoff, rewatch this" style="flex:1"></div>
+  <div class="hint">Convert to a real event (opens the panel prefilled at this game time):</div>
+  <div class="row">
+    <button data-conv="shot-us">Shot us</button><button data-conv="shot-opp">Shot opp</button>
+    <button data-conv="goal-us">Goal us</button><button data-conv="goal-opp">Goal opp</button>
+    <button data-conv="pen-us">Penalty us</button><button data-conv="pen-opp">Penalty opp</button>
+    <button data-conv="lineup-us">Lineup</button>
+  </div>
+  <div class="row"><button class="pri save" id="markSave">Save note (Enter)</button></div>
+</dialog>
+
 <dialog id="dlgOvr">
   <h3>Game-state override</h3>
   <div class="row"><select id="ovrVal">
@@ -318,10 +339,18 @@ a{color:var(--us)}
 
 <script>
 "use strict";
-/* ---- keyboard map: edit here to rebind (documented in /manual) ---- */
-const KEYS = {playPause:" ", calibrate:"c", clock:"k", shotUs:"s", shotOpp:"a",
-  goalUs:"g", goalOpp:"h", penUs:"p", penOpp:"o", lineup:"l", override:"u",
-  back:"ArrowLeft", fwd:"ArrowRight", slower:",", faster:"."};
+/* ---- keyboard map: defaults; rebindable in the Setup tab (localStorage) ---- */
+const KEY_DEFS = {
+  playPause:[" ","Play / pause video"], back:["ArrowLeft","Seek back 5 s (Shift: 1 s)"],
+  fwd:["ArrowRight","Seek forward 5 s (Shift: 1 s)"], slower:[",","Playback slower"],
+  faster:[".","Playback faster"], calibrate:["c","Calibrate clock"], clock:["k","Clock run / stop"],
+  shotUs:["s","Shot: Falcons"], shotOpp:["a","Shot: opponent"],
+  goalUs:["g","Goal: Falcons"], goalOpp:["h","Goal: opponent"],
+  penUs:["p","Penalty: Falcons"], penOpp:["o","Penalty: opponent"],
+  lineup:["l","Line change"], override:["u","State override"],
+  marker:["n","Quick marker (fill details later)"]};
+const KEYS = Object.fromEntries(Object.entries(KEY_DEFS).map(([k,[d]])=>
+  [k, (JSON.parse(localStorage.getItem("falcKeys")||"{}"))[k]||d]));
 
 const $ = s=>document.querySelector(s), $$ = s=>[...document.querySelectorAll(s)];
 const api = async (p, method="GET", body)=>{
@@ -555,13 +584,19 @@ function evText(e){
   }
   if(e.type==="penalty") return `${e.team==="us"?pname(e.player_id)||"Falcons":"Opponent"} ${e.pim}′${e.zone?" · "+e.zone:""}`;
   if(e.type==="lineup"){const ids=JSON.parse(e.on_ice||"[]");return ids.map(id=>{const p=PBYID()[id];return p?p.number:id;}).join(" ")||"empty";}
+  if(e.type==="marker") return `◇ ${e.note||"marker"}`;
   return e.override;
 }
+const needsInfo = e => e.type==="marker" ||
+  (e.type==="shot" && (e.x==null || (e.team==="us" && !e.player_id)));
 function renderLog(){
-  const rows = EVS.slice().sort((a,b)=>elapsedOf(b)-elapsedOf(a)||b.id-a.id);
+  let rows = EVS.slice().sort((a,b)=>elapsedOf(b)-elapsedOf(a)||b.id-a.id);
+  const todo = EVS.filter(needsInfo).length;
+  $("#evCount").textContent = `${EVS.length-todo}/${EVS.length} complete`;
+  if($("#evFilter").value==="todo") rows = rows.filter(needsInfo);
   $("#evTbl").innerHTML = "<tr><th>Time</th><th>Event</th><th></th></tr>"+rows.map(e=>
     `<tr data-ev="${e.id}"><td>${e.period===4?"OT":"P"+e.period} ${mmss(e.clock)}</td>
-     <td>${e.type==="shot"&&e.result==="goal"?"<b>":""}${esc(evText(e))}${e.type==="shot"&&e.result==="goal"?"</b>":""}</td>
+     <td>${needsInfo(e)?'<span class="err" title="needs details">⚠</span> ':""}${e.type==="shot"&&e.result==="goal"?"<b>":""}${esc(evText(e))}${e.type==="shot"&&e.result==="goal"?"</b>":""}</td>
      <td><button class="ghost" data-edit="${e.id}">✎</button><button class="ghost" data-del="${e.id}">✕</button></td></tr>`).join("");
   $$("#evTbl tr[data-ev]").forEach(tr=>tr.onclick=ev=>{
     if(ev.target.closest("button"))return;
@@ -602,13 +637,22 @@ function rinkSVG(){
   <path d="M 189 36.5 a 6 6 0 0 0 0 12" fill="none" stroke="var(--us)" opacity=".6"/>
   <path d="M 11 36.5 a 6 6 0 0 1 0 12" fill="none" stroke="var(--us)" opacity=".6"/>
   <rect x="189" y="39.5" width="3.4" height="6" fill="none" stroke="${C}"/>
-  <rect x="7.6" y="39.5" width="3.4" height="6" fill="none" stroke="${C}"/>`;
+  <rect x="7.6" y="39.5" width="3.4" height="6" fill="none" stroke="${C}"/>
+  <polygon points="189,39.5 169,20.5 154,20.5 154,64.5 169,64.5 189,45.5" fill="var(--us)" opacity=".05"/>
+  <polygon points="189,39.5 169,20.5 154,20.5 154,64.5 169,64.5 189,45.5" fill="none" stroke="${C}" stroke-width=".4" stroke-dasharray="2 1.5" opacity=".55"/>`;
 }
 function netSVG(){
   return `<rect x="0" y="0" width="72" height="48" fill="none" stroke="var(--opp)" stroke-width="2.5"/>
   <line x1="0" y1="48" x2="72" y2="48" stroke="var(--axis)" stroke-width="3"/>
   <line x1="24" y1="0" x2="24" y2="48" stroke="var(--grid)"/><line x1="48" y1="0" x2="48" y2="48" stroke="var(--grid)"/>
-  <line x1="0" y1="16" x2="72" y2="16" stroke="var(--grid)"/><line x1="0" y1="32" x2="72" y2="32" stroke="var(--grid)"/>`;
+  <line x1="0" y1="16" x2="72" y2="16" stroke="var(--grid)"/><line x1="0" y1="32" x2="72" y2="32" stroke="var(--grid)"/>
+  <g fill="var(--ink)" opacity=".13">
+    <rect x="19" y="38.5" width="34" height="9" rx="4"/>
+    <rect x="26.5" y="13" width="19" height="27" rx="6"/>
+    <circle cx="36" cy="9" r="5.2"/>
+    <circle cx="21" cy="21" r="5"/>
+    <rect x="46" y="17" width="7.5" height="9.5" rx="2"/>
+  </g>`;
 }
 function svgPoint(svg,ev){
   const pt=new DOMPoint(ev.clientX,ev.clientY).matrixTransform(svg.getScreenCTM().inverse());
@@ -693,11 +737,11 @@ function shotRows(){
 }
 $("#shResult").onchange=shotRows;
 function openShot(team,goal,ev){
-  shot = ev ? {team:ev.team,x:ev.x,y:ev.y,net_x:ev.net_x,net_y:ev.net_y}
+  shot = ev ? {team,x:ev.x,y:ev.y,net_x:ev.net_x,net_y:ev.net_y}
             : {team,x:null,y:null,net_x:null,net_y:null};
   editingId = ev?ev.id:null;
   $("#shTitle").textContent=(ev?"Edit shot — ":"")+(shot.team==="us"?"Falcons":"Opponent")+(goal?" GOAL":" shot");
-  $("#shResult").value = ev?ev.result:(goal?"goal":"on_goal");
+  $("#shResult").value = (ev&&ev.result)?ev.result:(goal?"goal":"on_goal");
   $("#shShooter").value=ev?.player_id?PBYID()[ev.player_id]?.number??"":"";
   $("#shBlocker").value=ev?.blocker_id?PBYID()[ev.blocker_id]?.number??"":"";
   $("#shA1").value=ev?.assist1_id?PBYID()[ev.assist1_id]?.number??"":"";
@@ -743,7 +787,7 @@ function openPen(team,ev){
   $("#rowPenPlayer").hidden=$("#rowPenZone").hidden=(team!=="us");
   $("#penPlayer").value=ev?.player_id?PBYID()[ev.player_id]?.number??"":"";
   $("#penPlayerName").textContent="";
-  $("#penLen").value=ev?String(ev.pim):"2";
+  $("#penLen").value=ev?.pim?String(ev.pim):"2";
   $("#penZone").value=ev?.zone||"def";
   openDlg(dlgPen);
   (team==="us"?$("#penPlayer"):$("#penLen")).focus();
@@ -889,12 +933,41 @@ async function saveOvr(){
 }
 wireEnter(dlgOvr,()=>save1(saveOvr)); $("#ovrSave").onclick=()=>save1(saveOvr);
 
+/* ================= quick marker (fill in later) ================= */
+const dlgMark=$("#dlgMark");
+let markEv=null;
+async function quickMarker(){ // no dialog, no pause: just stamp the moment
+  const s=snap(); if(!s)return;
+  await postEvent(Object.assign({type:"marker",team:"us",note:""},s));
+}
+function openMark(ev){
+  markEv=ev; editingId=ev.id;
+  $("#markNote").value=ev.note||"";
+  openDlg(dlgMark); $("#markNote").focus();
+}
+async function saveMark(){
+  const e=await api("/events/"+markEv.id,"PUT",{note:$("#markNote").value});
+  EVS[EVS.findIndex(x=>x.id===markEv.id)]=e; renderLog();
+  afterSave(dlgMark);
+}
+wireEnter(dlgMark,()=>save1(saveMark)); $("#markSave").onclick=()=>save1(saveMark);
+$$("#dlgMark [data-conv]").forEach(b=>b.onclick=()=>{
+  const ev=markEv; dlgMark.close();
+  const [t,team]=b.dataset.conv.split("-");
+  if(t==="shot")openShot(team,false,ev);
+  else if(t==="goal")openShot(team,true,ev);
+  else if(t==="pen")openPen(team,ev);
+  else openLineup(ev);
+});
+$("#evFilter").onchange=renderLog;
+
 /* edit dispatch */
 function editEvent(id){
   const e=EVS.find(x=>x.id===id);
   if(e.type==="shot")openShot(e.team,e.result==="goal",e);
   else if(e.type==="penalty")openPen(e.team,e);
   else if(e.type==="lineup")openLineup(e);
+  else if(e.type==="marker")openMark(e);
   else openOvr(e);
 }
 
@@ -915,10 +988,46 @@ document.addEventListener("keydown",e=>{
     [KEYS.goalUs]:()=>openShot("us",true), [KEYS.goalOpp]:()=>openShot("opp",true),
     [KEYS.penUs]:()=>openPen("us"), [KEYS.penOpp]:()=>openPen("opp"),
     [KEYS.lineup]:()=>openLineup(), [KEYS.override]:()=>openOvr(),
+    [KEYS.marker]:quickMarker,
   };
   if(acts[k]){e.preventDefault();acts[k]();}
 });
-$$("dialog").forEach(d=>d.addEventListener("close",()=>{editingId=null;}));
+$$("dialog").forEach(d=>d.addEventListener("close",()=>{
+  // close events fire async: keep editingId when another dialog already took over (marker conversion)
+  if(!document.querySelector("dialog[open]")) editingId=null;
+}));
+
+/* ================= shortcut rebinding (Setup tab) ================= */
+const prettyKey=k=>({" ":"Space",ArrowLeft:"←",ArrowRight:"→",ArrowUp:"↑",ArrowDown:"↓"}[k]||k.toUpperCase());
+function renderKeys(){
+  $("#keysTbl").innerHTML="<tr><th>Action</th><th>Key</th><th></th></tr>"+
+    Object.entries(KEY_DEFS).map(([id,[,label]])=>`<tr><td>${label}</td>
+      <td><kbd>${prettyKey(KEYS[id])}</kbd></td>
+      <td><button class="ghost" data-rebind="${id}">Rebind</button></td></tr>`).join("");
+  $$("[data-rebind]").forEach(b=>b.onclick=()=>{
+    const id=b.dataset.rebind;
+    b.textContent="press a key…";
+    const grab=e=>{
+      e.preventDefault(); e.stopPropagation();
+      document.removeEventListener("keydown",grab,true);
+      if(e.key==="Escape"){renderKeys();return;}
+      const k=e.key.length===1?e.key.toLowerCase():e.key;
+      const clash=Object.entries(KEYS).find(([a,v])=>v===k&&a!==id);
+      if(clash){$("#keysMsg").textContent=`"${prettyKey(k)}" is already ${KEY_DEFS[clash[0]][1]}`;renderKeys();return;}
+      KEYS[id]=k;
+      const ov=JSON.parse(localStorage.getItem("falcKeys")||"{}"); ov[id]=k;
+      localStorage.setItem("falcKeys",JSON.stringify(ov));
+      $("#keysMsg").textContent="Saved."; renderKeys();
+    };
+    document.addEventListener("keydown",grab,true);
+  });
+}
+$("#keysReset").onclick=()=>{
+  localStorage.removeItem("falcKeys");
+  Object.entries(KEY_DEFS).forEach(([k,[d]])=>KEYS[k]=d);
+  $("#keysMsg").textContent="Defaults restored."; renderKeys();
+};
+renderKeys();
 
 /* ================= dashboard ================= */
 function fillDashFilters(){
@@ -952,7 +1061,9 @@ function renderDash(){
     <tr><td>Goals</td><td>${t.gf}</td><td>${t.ga}</td></tr>
     <tr><td>Shots on goal</td><td>${t.sog_f}</td><td>${t.sog_a}</td></tr>
     <tr><td>All attempts</td><td>${t.att_f}</td><td>${t.att_a}</td></tr>
-    <tr><td>xG</td><td>${t.xg_f}</td><td>${t.xg_a}</td></tr>
+    <tr><td>xG (all attempts)</td><td>${t.xg_f}</td><td>${t.xg_a}</td></tr>
+    <tr><td>xGOT (shots on goal with placement)</td><td>${t.xgot_f}</td><td>${t.xgot_a}</td></tr>
+    <tr><td>Slot SOG (home plate)</td><td>${t.slot_f}</td><td>${t.slot_a}</td></tr>
     <tr><td>Shooting %</td><td>${t.sh_pct}%</td><td></td></tr>
     <tr><td>PP</td><td>${t.ppg} G / ${t.pp_opps} opps (${t.pp_pct}%)</td><td>SOG per PP: ${t.shots_per_pp}</td></tr>
     <tr><td>PK</td><td>${t.sh_times-t.ppga} killed / ${t.sh_times} (${t.pk_pct}%)</td><td>GA on PK: ${t.ppga}</td></tr>
@@ -964,12 +1075,12 @@ function renderDash(){
     <span><span class="bar" title="SOG for P${p}: ${d.sf}" style="width:${d.sf/mx*90}%;background:var(--us)"></span><span class="bnum">${d.sf}</span></span>
     <span><span class="bar" title="SOG against P${p}: ${d.sa}" style="width:${d.sa/mx*90}%;background:var(--opp)"></span><span class="bnum">${d.sa}</span></span></div>`;}).join("")
     ||`<div class="hint">no shots in the current filter</div>`;
-  $("#playersTbl").innerHTML=`<tr><th>#</th><th>Player</th><th>GP</th><th>G</th><th>A</th><th>P</th><th>SOG</th><th>Att</th><th>Sh%</th><th>xG</th><th>Blk</th><th>Pen</th><th>PIM</th><th>Scr</th><th>TOI</th><th>5v5</th><th>PP</th><th>PK</th><th>P/60</th><th>S/60 5v5</th><th>SF on</th><th>SA on</th><th>GF on</th><th>GA on</th></tr>`+
+  $("#playersTbl").innerHTML=`<tr><th>#</th><th>Player</th><th>GP</th><th>G</th><th>A</th><th>P</th><th>SOG</th><th>Att</th><th>Sh%</th><th>xG</th><th>xGOT</th><th>Blk</th><th>Pen</th><th>PIM</th><th>Scr</th><th>TOI</th><th>5v5</th><th>PP</th><th>PK</th><th>P/60</th><th>S/60 5v5</th><th>SF on</th><th>SA on</th><th>GF on</th><th>GA on</th></tr>`+
     DASH.players.map(p=>`<tr><td>${p.number??""}</td><td>${esc(p.name)}</td><td>${p.gp}</td><td>${p.g}</td><td>${p.a}</td><td><b>${p.p}</b></td>
-      <td>${p.sog}</td><td>${p.att}</td><td>${p.sh_pct}</td><td>${p.xg}</td><td>${p.blk}</td><td>${p.pen}</td><td>${p.pim}</td><td>${p.screens}</td>
+      <td>${p.sog}</td><td>${p.att}</td><td>${p.sh_pct}</td><td>${p.xg}</td><td>${p.xgot}</td><td>${p.blk}</td><td>${p.pen}</td><td>${p.pim}</td><td>${p.screens}</td>
       <td>${TOI(p.toi)}</td><td>${TOI(p.toi_5v5)}</td><td>${TOI(p.toi_pp)}</td><td>${TOI(p.toi_pk)}</td>
       <td>${p.p60}</td><td>${p.s60_5v5}</td><td>${p.sf_on}</td><td>${p.sa_on}</td><td>${p.gf_on}</td><td>${p.ga_on}</td></tr>`).join("")
-    ||`<tr><td colspan="24" class="hint">No data in the current filter.</td></tr>`;
+    ||`<tr><td colspan="25" class="hint">No data in the current filter.</td></tr>`;
   const tg=DASH.together||{units:[],pairs:[]};
   $("#unitsTbl").innerHTML="<tr><th>Line</th><th>Players</th><th>TOI together</th><th>GF</th><th>GA</th></tr>"+
     (tg.units.map(u=>`<tr><td>${esc(u.line)}</td><td>${esc(u.players)}</td><td>${TOI(u.toi)}</td><td>${u.gf}</td><td>${u.ga}</td></tr>`).join("")
@@ -986,7 +1097,7 @@ function drawMaps(){
   const team=$("#hTeam").value, pid=+$("#hPlayer").value, res=$("#hResult").value, mode=$("#hMode").value;
   const shots=DASH.shots.filter(s=>s.team===team&&(!pid||s.player_id===pid)&&(!res||s.result===res)&&s.x!=null);
   const marks=shots.map(s=>{
-    const tip=`<title>${s.result==="goal"?"GOAL":s.result} · ${s.player_id?esc((PBYID()[s.player_id]||{}).name||""):"opponent"} · P${s.period} · ${s.state} · xG ${s.xg??"—"}</title>`;
+    const tip=`<title>${s.result==="goal"?"GOAL":s.result} · ${s.player_id?esc((PBYID()[s.player_id]||{}).name||""):"opponent"} · P${s.period} · ${s.state}${s.slot?" · slot":""} · xG ${s.xg??"—"}${s.xgot?` · xGOT ${s.xgot}`:""}</title>`;
     if(mode==="density")
       return `<circle cx="${s.x}" cy="${s.y}" r="7" fill="${team==="us"?"var(--us)":"var(--opp)"}" opacity="0.16">${tip}</circle>`;
     const goal=s.result==="goal";
@@ -997,7 +1108,7 @@ function drawMaps(){
   const nets=shots.filter(s=>s.net_x!=null);
   $("#netmap").innerHTML=netSVG()+nets.map(s=>
     `<circle cx="${s.net_x*72/100}" cy="${s.net_y*48/100}" r="2.6" fill="${s.result==="goal"?"var(--goal)":"var(--us)"}">
-     <title>${s.result} · xG ${s.xg??"—"}</title></circle>`).join("")+
+     <title>${s.result==="goal"?"GOAL":"saved"} · xG ${s.xg??"—"}${s.xgot?` · xGOT ${s.xgot}`:""}</title></circle>`).join("")+
     (nets.length?"":`<text x="8" y="24" style="font-size:6px">no placement data in filter</text>`);
 }
 /* CSV export: any table -> download */

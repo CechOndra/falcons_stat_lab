@@ -91,8 +91,11 @@ calibration drifted afterwards.
 | `Esc` | cancel any panel |
 | `Enter` | next field / save panel |
 
-To rebind, edit the `KEYS` map at the top of the script in
-`static/index.html`.
+Plus `N` = **quick marker**: instantly stamps the current game + video time
+with no panel and no pause (see 3.5).
+
+To rebind any shortcut: **Setup tab → Keyboard shortcuts → Rebind**, then
+press the new key. Stored per browser; one click resets the defaults.
 
 ### 3.4 Logging events
 
@@ -110,11 +113,15 @@ Required fields block saving; optional ones are simply left empty.
 
 **Shot (`S`/`A`)** — click the shot location on the rink (required; the
 shooter always attacks the **right** net, regardless of team — click
-accordingly). For our shots the shooter number is required. Result: on goal /
-missed / blocked / goal. If an opponent shot was **blocked by one of our
-players**, enter the blocker's number (our blocked shots don't track the
-opposing blocker). For shots on goal and goals you can optionally click the
-goal-mouth diagram (shooter's view) to record placement.
+accordingly). The faint dashed area in front of the net is the **slot**
+("home plate"); shots inside it are tagged automatically for the slot stats.
+For our shots the shooter number is required. Result: on goal / missed /
+blocked / goal. If an opponent shot was **blocked by one of our players**,
+enter the blocker's number (our blocked shots don't track the opposing
+blocker). For shots on goal and goals you can optionally click the goal-mouth
+diagram (shooter's view; the translucent goalie silhouette shows where the
+pads, glove and blocker are) to record placement — that click is what powers
+xGOT.
 
 **Goal (`G`/`H`)** — same panel with result preset to GOAL. For our goals:
 up to two assists, optional screen credit, optional net placement. Opponent
@@ -162,6 +169,15 @@ Ice time accrues between snapshots **only while the game clock runs**, so
 stoppage time never inflates TOI. Log a snapshot at every change you care
 about; more snapshots = more accurate TOI, on-ice and together stats.
 
+**Quick marker (`N`)** — for when something happened but you don't want to
+stop: one keypress stamps the game time and video time, nothing else, and the
+video keeps playing. Later, click ✎ on the marker to add a note ("faceoff",
+"rewatch this") or **convert it into a real event** — the shot/goal/penalty/
+lineup panel opens prefilled at the marker's original time. The event log
+header shows a **complete/total counter**, and the filter next to it
+("Needs info") lists exactly the events still missing details: markers, and
+shots without a location or shooter. That's your second-pass worklist.
+
 ### 3.5 Fixing mistakes
 
 The event log (right side, newest first) is fully editable: **✎** reopens the
@@ -186,7 +202,8 @@ instead).
 
 - **Tiles**: score, shots on goal, shooting %, PP % (goals per opportunity),
   PK % (kills per shorthanded situation), xG for/against.
-- **Team table**: attempts vs on-goal, shots per PP, penalties by zone, PIM.
+- **Team table**: attempts vs on-goal, xG and xGOT for/against, slot SOG
+  (home plate), shots per PP, penalties by zone, PIM.
 - **Shots by period**: for/against bars per period.
 - **Player table**: G/A/P, SOG, shooting %, xG, blocks, penalties/PIM, screen
   credits, TOI total and split by 5v5/PP/PK, points per 60, 5v5 shots per 60,
@@ -199,24 +216,55 @@ instead).
 - **Shot map**: dots colored by result (hover any dot for shooter, state,
   xG) or a density view; filter by team, player, result. All shots are shown
   attacking right.
-- **Goal-mouth chart**: where on-goal shots went, shooter's view; green =
-  goals.
+- **Goal-mouth chart**: where on-goal shots went (shooter's view) — green =
+  goals, blue = **saved**; the translucent goalie shows what was covered;
+  hover any dot for its xG/xGOT.
 - **⬇ CSV** on any table downloads it.
 
-### The xG model (assumptions)
+### Rink coordinates, zones and the slot
 
-Each located shot gets an expected-goal value from a simple logistic function
-of **distance** and **angle off the net axis**:
+Shots are stored as **x/y in feet on a standard 200 × 85 ft rink**, always
+normalized so the shooter attacks the right net. The diagram is drawn at the
+true aspect ratio, so nothing is distorted. Reference points:
 
-```
-xG = 1 / (1 + e^-(0.9 − 0.10·distance_ft − 1.3·angle_rad))
-```
+- net center **(189, 42.5)**, posts at y 39.5 / 45.5; goal lines x = 11 / 189
+- blue lines x = 75 / 125 → offensive zone = x ∈ [125, 200]
+- face-off dots (169, 20.5) and (169, 64.5); circles r = 15
+- **slot ("home plate")**: the polygon (189, 39.5) → (169, 20.5) →
+  (154, 20.5) → (154, 64.5) → (169, 64.5) → (189, 45.5) — from the posts out
+  to the dots, then across the top of the circles. It's drawn faintly on
+  every rink diagram, and each shot gets an automatic in-slot tag (team
+  table: "Slot SOG"; shot-map tooltips).
 
-Hand-tuned for amateur hockey: ≈35 % point-blank in the slot, ≈5 % from the
-face-off circles, ≈1 % from the blue line. It knows nothing about rebounds,
-rushes, or screens — treat it as a location-quality index, not truth. The
-whole model is the single `xg_value()` function in `app.py`; swap that
-function to upgrade it, all stats pick it up automatically.
+### The xG and xGOT models (assumptions & sources)
+
+**xG** — every located shot attempt gets
+`xG = 1 / (1 + e^−(−0.895 − 0.050·distance_ft − 1.355·angle_rad))`,
+a logistic model least-squares fitted to published NHL location values:
+league shooting % on goal ≈ 7.2 % (2022-23), crease ≈ 15-25 %, slot 10-15 %,
+perimeter 2-4 %, slot defined as 15-30 ft / 20-40°. Resulting anchors:
+crease ≈ .20, mid-slot ≈ .10, circles ≈ .04, blue line ≈ .02.
+
+**xGOT** (expected goals on target) — only for shots **on goal with a
+recorded goal-mouth placement**:
+`xGOT = P(goal | on goal, location) × placement factor`, where the base is a
+second logistic fitted to on-goal anchors (crease .25, slot .13, circles
+.055, point .025) and the placement factor rewards corners and the upper
+net and penalizes the goalie's center mass, with a mild five-hole bump —
+directions taken from published shot-target studies (low-center is the worst
+target; high corners and five-hole outperform). Read it as: xGOT ≫ goals =
+the goalie bailed them out / great placement wasted; goals ≫ xGOT on-target =
+finishing above the shot quality.
+
+Honesty note: these are NHL-derived numbers applied to an amateur league —
+levels will differ (expect more goals than xG predicts), but rankings and
+comparisons stay meaningful. Neither model knows about rebounds, rushes or
+screens. Both live as two small functions in `app.py` (`xg_value`,
+`xgot_value`); swap them and every stat updates. Sources: Zach Stafiej's NHL
+22-23 SOG analysis (league sh% 7.19 %, crease ≈ 15 %), Ivy Hockey's shot
+quality primer (slot 10-15 %, perimeter 2-4 %), MetricGate xG methodology
+(logistic distance+angle form), Arctic Ice Hockey / The Point shot-target
+placement studies.
 
 ## 5. Users & roles
 

@@ -47,7 +47,7 @@ def main():
     ev(g1, "shot", "us", 1140, player_id=a, x=170, y=40, result="on_goal")  # t=60, 5v5
     ev(g1, "penalty", "opp", 1100, pim=2)                                   # t=100 -> our PP
     ev(g1, "shot", "us", 1050, player_id=a, x=175, y=42, result="goal",
-       assist1_id=b)                                                        # t=150 PP goal, ends penalty
+       assist1_id=b, net_x=90, net_y=20)                                    # t=150 PP goal, ends penalty
     ev(g1, "lineup", "us", 1000, on_ice=f"[{a}]")                           # t=200: only A
     ev(g1, "penalty", "us", 900, player_id=c, pim=2, zone="def")            # t=300 -> our PK
     ev(g1, "shot", "opp", 850, x=170, y=40, result="on_goal")               # t=350, PK survived
@@ -67,11 +67,14 @@ def main():
     assert t["pim"] == 2 and t["pens_zone"] == {"off": 0, "neu": 0, "def": 1}
     assert t["by_period"]["1"] == {"sf": 3, "sa": 1}
     assert 0 < t["xg_f"] < 2 and 0 < t["xg_a"] < 1
+    assert (t["slot_f"], t["slot_a"]) == (2, 1)  # house SOG for/against
+    assert t["xgot_f"] > 0 and t["xgot_a"] == 0  # only the placed PP goal has xGOT
     assert len(s["shots"]) == 6 and all(0 < sh["xg"] < 1 for sh in s["shots"])
 
     P = {p["player_id"]: p for p in s["players"]}
     pa, pb, pc = P[a], P[b], P[c]
     assert (pa["g"], pa["a"], pa["p"], pa["sog"], pa["att"]) == (1, 0, 1, 3, 3)
+    assert pa["xgot"] > 0
     assert (pa["toi"], pa["toi_pp"], pa["toi_pk"], pa["toi_5v5"]) == (3600, 50, 220, 3330)
     assert (pa["p60"], pa["s60_5v5"]) == (1.0, 1.08)
     assert (pa["sf_on"], pa["sa_on"], pa["gf_on"], pa["ga_on"]) == (3, 1, 1, 0)
@@ -110,6 +113,15 @@ def main():
     g = client.get(f"/api/games?id={g1}").json()[0]
     assert g["last_video_pos"] == 1234.5 and '"p1.mp4"' in g["video_files"]
 
+    # marker events: instant stamp, ignored by stats, convertible via PUT
+    mk = ev(g1, "marker", "us", 300, note="faceoff?")
+    s3 = client.get(f"/api/stats?game_ids={g1}").json()
+    assert s3["team"]["sog_f"] == 3 and s3["team"]["pp_opps"] == 1
+    r = client.put(f"/api/events/{mk['id']}", json={"type": "penalty", "team": "opp", "pim": 2})
+    assert r.status_code == 200 and r.json()["type"] == "penalty" and r.json()["note"] == "faceoff?"
+    assert client.get(f"/api/stats?game_ids={g1}").json()["team"]["pp_opps"] == 2
+    assert client.delete(f"/api/events/{mk['id']}").status_code == 200
+
     # --- game 2: opponent PP goal ends OUR minor ---
     g2 = post("/api/games", {"opponent_id": opp["id"], "period_len": 1200})["id"]
     ev(g2, "penalty", "us", 1100, player_id=c, pim=2)                    # t=100
@@ -120,10 +132,17 @@ def main():
     states = {(sh["result"], sh["state"]) for sh in s2["shots"]}
     assert ("goal", "pk") in states and ("on_goal", "5v5") in states
 
-    # xG model shape: close+central beats far
-    assert 0.15 < appmod.xg_value(170, 42.5) < 0.45
-    assert appmod.xg_value(130, 42.5) < 0.02
+    # xG calibrated to published NHL anchors: crease ~.20, slot ~.10, point ~.02
+    assert 0.17 < appmod.xg_value(181, 42.5) < 0.24
+    assert 0.07 < appmod.xg_value(170, 45) < 0.13
+    assert appmod.xg_value(134, 42.5) < 0.03
     assert appmod.xg_value(175, 42.5) > appmod.xg_value(175, 20)
+    # xGOT: corners beat the goalie's chest; requires placement
+    assert appmod.xgot_value(175, 42.5, 95, 15) > 2 * appmod.xgot_value(175, 42.5, 50, 45)
+    assert appmod.xgot_value(175, 42.5, None, None) is None
+    # slot = NHL home plate
+    assert appmod.in_slot(180, 42.5) and appmod.in_slot(160, 30)
+    assert not appmod.in_slot(130, 42.5) and not appmod.in_slot(180, 10)
 
     # static + manual served
     assert client.get("/").status_code == 200 and b"Falcons Stat Lab" in client.get("/").content
