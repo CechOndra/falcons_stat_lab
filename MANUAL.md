@@ -35,6 +35,15 @@ home/away, period length (20 min default), tick the dressed lineup → **Save
 game**. Past games are created exactly the same way — just set the old date.
 The score column fills itself from logged goals.
 
+The **Logged** column grades how completely each game is tracked:
+
+- **Basic** (the minimum for trustworthy stats): shots and line changes
+  (ice time) are logged.
+- **Premium**: Basic, plus every event fully filled in — no pending markers,
+  every shot with its location and shooter.
+- Small icons mark optional extras present in that game: ◉ faceoffs,
+  ⇥ zone entries, ⇤ zone exits. Hover the badge for details.
+
 ## 3. Logging a game
 
 Open a game (**Games → Open / log**). Everything below happens in the **Log**
@@ -90,6 +99,10 @@ calibration drifted afterwards.
 | `U` | manual PP/PK state override |
 | `Esc` | cancel any panel |
 | `Enter` | next field / save panel |
+
+| `F` | faceoff (won/lost, optional taker) |
+| `E` | zone entry — into the offensive zone |
+| `W` | zone exit — breakout from our zone |
 
 Plus `N` = **quick marker**: instantly stamps the current game + video time
 with no panel and no pause (see 3.5).
@@ -169,6 +182,15 @@ Ice time accrues between snapshots **only while the game clock runs**, so
 stoppage time never inflates TOI. Log a snapshot at every change you care
 about; more snapshots = more accurate TOI, on-ice and together stats.
 
+**Optional extras — faceoffs (`F`), zone entries (`E`), zone exits (`W`)** —
+entirely skippable stat families; track them in the games where you want the
+extra depth. Faceoff: who won (us/opponent) and optionally which of our
+players took it → faceoff % per team and player. Entry/exit: optionally the
+player, plus controlled (carried/passed) vs uncontrolled (dump/chip) → zone
+play counts and control rates. Games that contain these events get a small
+icon in the games list (◉ faceoffs, ⇥ entries, ⇤ exits) so you can see at a
+glance which games carry which stats.
+
 **Quick marker (`N`)** — for when something happened but you don't want to
 stop: one keypress stamps the game time and video time, nothing else, and the
 video keeps playing. Later, click ✎ on the marker to add a note ("faceoff",
@@ -209,10 +231,16 @@ instead).
   credits, TOI total and split by 5v5/PP/PK, points per 60, 5v5 shots per 60,
   and on-ice shot/goal counts (for/against while the player was on the ice —
   the plus-minus / Corsi building blocks).
-- **Together on ice**: TOI, GF and GA for your **defined line units** (the
-  trio/pair fully on ice together) and for the top **player pairs** by shared
-  ice time — line chemistry straight from the lineup snapshots, no extra
-  logging.
+- **Together on ice**: TOI, GF/GA **and GF-per-60 / GA-per-60 rates** for
+  your **defined line units** and for **player pairs** by shared ice time —
+  line chemistry straight from the lineup snapshots, no extra logging. Pick
+  a player in the selector to list *all* of their teammates sorted by time
+  shared.
+- **Shift chart**: select exactly one game in the filters and every player's
+  shifts draw as a timeline across the periods — who played when, hover a
+  bar for exact times.
+- **Faceoffs & zone play**: team faceoff W-L-%, entries/exits with control
+  rates, and a per-player table (appears once you log those event types).
 - **Shot map**: dots colored by result (hover any dot for shooter, state,
   xG) or a density view; filter by team, player, result. All shots are shown
   attacking right.

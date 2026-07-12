@@ -86,6 +86,10 @@ svg text{fill:var(--muted);font-size:5px}
 a{color:var(--us)}
 .err{color:var(--opp);font-size:12px}
 .ok{color:var(--goal)}
+.badge{display:inline-block;border:1px solid var(--axis);border-radius:10px;padding:0 8px;font-size:11px;font-weight:600;color:var(--ink3)}
+.badge.basic{border-color:var(--us);color:var(--us)}
+.badge.premium{background:var(--goal);border-color:var(--goal);color:#fff}
+.icons{font-size:13px;letter-spacing:2px}
 </style>
 </head>
 <body>
@@ -141,7 +145,8 @@ a{color:var(--us)}
           <kbd>Space</kbd> play/pause · <kbd>←</kbd>/<kbd>→</kbd> ±5s (<kbd>Shift</kbd> ±1s) · <kbd>,</kbd>/<kbd>.</kbd> speed ·
           <kbd>C</kbd> calibrate · <kbd>K</kbd> clock run/stop ·
           <kbd>S</kbd>/<kbd>A</kbd> shot us/opp · <kbd>G</kbd>/<kbd>H</kbd> goal us/opp ·
-          <kbd>P</kbd>/<kbd>O</kbd> penalty us/opp · <kbd>L</kbd> line change · <kbd>U</kbd> state override
+          <kbd>P</kbd>/<kbd>O</kbd> penalty us/opp · <kbd>L</kbd> line change · <kbd>U</kbd> state override ·
+          <kbd>F</kbd> faceoff · <kbd>E</kbd>/<kbd>W</kbd> zone entry/exit · <kbd>N</kbd> quick marker
         </div>
       </div>
     </div>
@@ -189,9 +194,16 @@ a{color:var(--us)}
   <div class="card"><h3>Together on ice</h3>
     <h3>Line units <button class="ghost" data-csv="unitsTbl">⬇ CSV</button></h3>
     <div class="tblwrap"><table id="unitsTbl"></table></div>
-    <h3>Player pairs — top 30 by shared TOI <button class="ghost" data-csv="pairsTbl">⬇ CSV</button></h3>
+    <div class="row"><h3 style="margin:0">Player pairs <button class="ghost" data-csv="pairsTbl">⬇ CSV</button></h3>
+      <select id="pairPlayer" style="margin-left:auto"><option value="0">Top 30 pairs</option></select></div>
     <div class="tblwrap"><table id="pairsTbl"></table></div>
-    <div class="hint">TOI both/all on ice together; GF/GA = goals for/against while together. Units are the lines defined per game (same trio/pair logged across games adds up).</div>
+    <div class="hint">TOI both/all on ice together; GF/GA and per-60 rates = goals for/against while together. Pick a player to see all their teammates sorted by shared ice time.</div>
+  </div>
+  <div class="card" id="shiftCard"><h3>Shift chart <span class="hint">select exactly one game in the filters above</span></h3>
+    <div class="tblwrap"><svg id="shiftChart" style="width:100%"></svg></div>
+  </div>
+  <div class="card" id="extrasCard"><h3>Faceoffs &amp; zone play <button class="ghost" data-csv="extrasTbl">⬇ CSV</button></h3>
+    <div class="tblwrap"><table id="extrasTbl"></table></div>
   </div>
   <div class="card"><h3>Shot map</h3>
     <div class="row">
@@ -316,6 +328,20 @@ a{color:var(--us)}
   <div class="row"><button class="pri save" id="linesSave">Save (Enter)</button></div>
 </dialog>
 
+<dialog id="dlgFo">
+  <h3>Faceoff</h3>
+  <div class="row">Won by <select id="foWon"><option value="us">Falcons</option><option value="opp">opponent</option></select></div>
+  <div class="row">Taken by our #<input id="foPlayer" class="num" inputmode="numeric"><span id="foPlayerName" class="hint"></span><span class="hint">(optional)</span></div>
+  <div class="row"><button class="pri save" id="foSave">Save (Enter)</button></div>
+</dialog>
+
+<dialog id="dlgZone">
+  <h3 id="znTitle">Zone entry</h3>
+  <div class="row">Player #<input id="znPlayer" class="num" inputmode="numeric"><span id="znPlayerName" class="hint"></span><span class="hint">(optional)</span></div>
+  <div class="row"><select id="znCtrl"><option value="controlled">controlled (carried / passed)</option><option value="uncontrolled">uncontrolled (dump / chip)</option></select></div>
+  <div class="row"><button class="pri save" id="znSave">Save (Enter)</button></div>
+</dialog>
+
 <dialog id="dlgMark">
   <h3>Marker</h3>
   <div class="row">Note <input id="markNote" placeholder="e.g. faceoff, rewatch this" style="flex:1"></div>
@@ -324,7 +350,8 @@ a{color:var(--us)}
     <button data-conv="shot-us">Shot us</button><button data-conv="shot-opp">Shot opp</button>
     <button data-conv="goal-us">Goal us</button><button data-conv="goal-opp">Goal opp</button>
     <button data-conv="pen-us">Penalty us</button><button data-conv="pen-opp">Penalty opp</button>
-    <button data-conv="lineup-us">Lineup</button>
+    <button data-conv="lineup-us">Lineup</button><button data-conv="fo-us">Faceoff</button>
+    <button data-conv="zentry-us">Entry</button><button data-conv="zexit-us">Exit</button>
   </div>
   <div class="row"><button class="pri save" id="markSave">Save note (Enter)</button></div>
 </dialog>
@@ -350,7 +377,8 @@ const KEY_DEFS = {
   goalUs:["g","Goal: Falcons"], goalOpp:["h","Goal: opponent"],
   penUs:["p","Penalty: Falcons"], penOpp:["o","Penalty: opponent"],
   lineup:["l","Line change"], override:["u","State override"],
-  marker:["n","Quick marker (fill details later)"]};
+  marker:["n","Quick marker (fill details later)"],
+  faceoff:["f","Faceoff"], entry:["e","Zone entry (offensive)"], exit:["w","Zone exit (breakout)"]};
 const KEYS = Object.fromEntries(Object.entries(KEY_DEFS).map(([k,[d]])=>
   [k, (JSON.parse(localStorage.getItem("falcKeys")||"{}"))[k]||d]));
 
@@ -365,7 +393,7 @@ const mmss = s=>`${Math.floor(s/60)}:${String(Math.floor(s%60)).padStart(2,"0")}
 const parseClock = t=>{const m=/^(\d{1,2}):([0-5]?\d)$/.exec(t.trim());return m?60*+m[1]+ +m[2]:null;};
 const esc = s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 
-let SEASONS=[], TEAMS=[], PLAYERS=[], GAMES=[];
+let SEASONS=[], TEAMS=[], PLAYERS=[], GAMES=[], FLAGS={};
 let G=null, EVS=[], cal=null, onIce=new Set(), editingId=null, editingGame=null;
 const PBYID = ()=>Object.fromEntries(PLAYERS.map(p=>[p.id,p]));
 const pname = id=>{const p=PBYID()[id];return p?`#${p.number} ${p.name}`:(id?`?${id}`:"");};
@@ -379,13 +407,14 @@ $$("nav button").forEach(b=>b.onclick=()=>{
   $$("nav button").forEach(x=>x.classList.toggle("on",x===b));
   $$("section.tab").forEach(s=>s.classList.toggle("on",s.id==="tab-"+b.dataset.tab));
   if(b.dataset.tab==="dash") loadDash();
+  if(b.dataset.tab==="games") api("/game_flags").then(f=>{FLAGS=f;renderGames();});
 });
 const showTab = name=>$$("nav button").find(b=>b.dataset.tab===name).click();
 
 /* ================= reference data ================= */
 async function loadRefs(){
-  [SEASONS,TEAMS,PLAYERS,GAMES] = await Promise.all(
-    ["/seasons","/teams","/players","/games"].map(p=>api(p)));
+  [SEASONS,TEAMS,PLAYERS,GAMES,FLAGS] = await Promise.all(
+    ["/seasons","/teams","/players","/games","/game_flags"].map(p=>api(p)));
   renderSetup(); renderRoster(); renderGameForm(); renderGames(); fillDashFilters();
 }
 
@@ -458,17 +487,30 @@ $("#gSave").onclick = async()=>{
   loadRefs();
 };
 $("#gCancel").onclick = ()=>{editingGame=null;$("#gformTitle").textContent="New game";$("#gCancel").hidden=true;renderGameForm();};
+function gradeOf(f){
+  if(!f||!f.shot) return ['<span class="badge">—</span>',"nothing logged yet"];
+  if(!f.lineup) return ['<span class="badge">partial</span>',"shots logged; needs line changes (ice time) for Basic"];
+  if(f.todo) return ['<span class="badge basic">Basic</span>',`shots + ice time logged; ${f.todo} event(s) still need details`];
+  return ['<span class="badge premium">Premium</span>',"shots with locations + ice time, every event complete"];
+}
+function gameIcons(f){
+  if(!f) return "";
+  const ic=[["faceoff","◉","faceoffs tracked"],["entry","⇥","zone entries tracked"],["exit","⇤","zone exits tracked"]]
+    .filter(([k])=>f[k]).map(([,s,t])=>`<span title="${t}">${s}</span>`).join("");
+  return ic?`<span class="icons">${ic}</span>`:"";
+}
 function renderGames(){
   const tmap = Object.fromEntries(TEAMS.map(t=>[t.id,t.name]));
   const smap = Object.fromEntries(SEASONS.map(s=>[s.id,s.name]));
-  $("#gamesTbl").innerHTML = "<tr><th>Date</th><th>Season</th><th>Opponent</th><th>H/A</th><th>Score</th><th></th></tr>"+
-    GAMES.slice().reverse().map(g=>`<tr>
+  $("#gamesTbl").innerHTML = "<tr><th>Date</th><th>Season</th><th>Opponent</th><th>H/A</th><th>Score</th><th>Logged</th><th></th></tr>"+
+    GAMES.slice().reverse().map(g=>{const f=FLAGS[g.id],[badge,tip]=gradeOf(f);return `<tr>
       <td>${esc(g.date)}</td><td>${esc(smap[g.season_id]??"")}</td><td>${esc(tmap[g.opponent_id]??"?")}</td>
       <td>${g.home?"H":"A"}</td><td>${g.score_us}:${g.score_opp}</td>
+      <td title="${esc(tip)}">${badge} ${gameIcons(f)}</td>
       <td><button class="pri" data-open="${g.id}">Open / log</button>
           <button data-editg="${g.id}">Edit</button>
-          <button class="ghost" data-delg="${g.id}">✕</button></td></tr>`).join("")
-    ||`<tr><td colspan="6" class="hint">No games yet. Create the first one above.</td></tr>`;
+          <button class="ghost" data-delg="${g.id}">✕</button></td></tr>`;}).join("")
+    ||`<tr><td colspan="7" class="hint">No games yet. Create the first one above.</td></tr>`;
   $$("[data-open]").forEach(b=>b.onclick=()=>openGame(+b.dataset.open));
   $$("[data-delg]").forEach(b=>b.onclick=async()=>{
     if(confirm("Delete game AND all its events?")){
@@ -587,6 +629,9 @@ function evText(e){
   if(e.type==="penalty") return `${e.team==="us"?pname(e.player_id)||"Falcons":"Opponent"} ${e.pim}′${e.zone?" · "+e.zone:""}`;
   if(e.type==="lineup"){const ids=JSON.parse(e.on_ice||"[]");return ids.map(id=>{const p=PBYID()[id];return p?p.number:id;}).join(" ")||"empty";}
   if(e.type==="marker") return `◇ ${e.note||"marker"}`;
+  if(e.type==="faceoff") return `FO ${e.team==="us"?"won":"lost"}${e.player_id?" · "+pname(e.player_id):""}`;
+  if(e.type==="entry"||e.type==="exit")
+    return `${e.type==="entry"?"Entry":"Exit"} ${e.detail==="controlled"?"ctrl":"dump"}${e.player_id?" · "+pname(e.player_id):""}`;
   return e.override;
 }
 const needsInfo = e => e.type==="marker" ||
@@ -935,6 +980,54 @@ async function saveOvr(){
 }
 wireEnter(dlgOvr,()=>save1(saveOvr)); $("#ovrSave").onclick=()=>save1(saveOvr);
 
+/* ================= faceoff / zone entry / exit (quick extras) ================= */
+const dlgFo=$("#dlgFo"), dlgZone=$("#dlgZone");
+const getFoP=jersey("#foPlayer","#foPlayerName"), getZnP=jersey("#znPlayer","#znPlayerName");
+let znType="entry";
+function openFo(ev){
+  editingId=ev?ev.id:null;
+  $("#foWon").value=ev?.team||"us";
+  $("#foPlayer").value=ev?.player_id?PBYID()[ev.player_id]?.number??"":"";
+  $("#foPlayerName").textContent="";
+  openDlg(dlgFo); $("#foWon").focus();
+}
+async function saveFo(){
+  const p=getFoP();
+  if(!p.ok){$("#foPlayer").focus();return;}
+  const data={type:"faceoff",team:$("#foWon").value,player_id:p.id};
+  if(editingId){
+    const e=await api("/events/"+editingId,"PUT",data);
+    EVS[EVS.findIndex(x=>x.id===editingId)]=e; editingId=null; renderLog();
+  } else {
+    const s=snap(); if(!s)return;
+    await postEvent(Object.assign(data,s));
+  }
+  afterSave(dlgFo);
+}
+wireEnter(dlgFo,()=>save1(saveFo)); $("#foSave").onclick=()=>save1(saveFo);
+function openZone(kind,ev){
+  znType=kind; editingId=ev?ev.id:null;
+  $("#znTitle").textContent=kind==="entry"?"Zone entry (into the offensive zone)":"Zone exit (breakout from our zone)";
+  $("#znPlayer").value=ev?.player_id?PBYID()[ev.player_id]?.number??"":"";
+  $("#znPlayerName").textContent="";
+  $("#znCtrl").value=ev?.detail||"controlled";
+  openDlg(dlgZone); $("#znPlayer").focus();
+}
+async function saveZone(){
+  const p=getZnP();
+  if(!p.ok){$("#znPlayer").focus();return;}
+  const data={type:znType,team:"us",player_id:p.id,detail:$("#znCtrl").value};
+  if(editingId){
+    const e=await api("/events/"+editingId,"PUT",data);
+    EVS[EVS.findIndex(x=>x.id===editingId)]=e; editingId=null; renderLog();
+  } else {
+    const s=snap(); if(!s)return;
+    await postEvent(Object.assign(data,s));
+  }
+  afterSave(dlgZone);
+}
+wireEnter(dlgZone,()=>save1(saveZone)); $("#znSave").onclick=()=>save1(saveZone);
+
 /* ================= quick marker (fill in later) ================= */
 const dlgMark=$("#dlgMark");
 let markEv=null;
@@ -959,6 +1052,9 @@ $$("#dlgMark [data-conv]").forEach(b=>b.onclick=()=>{
   if(t==="shot")openShot(team,false,ev);
   else if(t==="goal")openShot(team,true,ev);
   else if(t==="pen")openPen(team,ev);
+  else if(t==="fo")openFo(ev);
+  else if(t==="zentry")openZone("entry",ev);
+  else if(t==="zexit")openZone("exit",ev);
   else openLineup(ev);
 });
 $("#evFilter").onchange=renderLog;
@@ -970,6 +1066,8 @@ function editEvent(id){
   else if(e.type==="penalty")openPen(e.team,e);
   else if(e.type==="lineup")openLineup(e);
   else if(e.type==="marker")openMark(e);
+  else if(e.type==="faceoff")openFo(e);
+  else if(e.type==="entry"||e.type==="exit")openZone(e.type,e);
   else openOvr(e);
 }
 
@@ -991,6 +1089,7 @@ document.addEventListener("keydown",e=>{
     [KEYS.penUs]:()=>openPen("us"), [KEYS.penOpp]:()=>openPen("opp"),
     [KEYS.lineup]:()=>openLineup(), [KEYS.override]:()=>openOvr(),
     [KEYS.marker]:quickMarker,
+    [KEYS.faceoff]:()=>openFo(), [KEYS.entry]:()=>openZone("entry"), [KEYS.exit]:()=>openZone("exit"),
   };
   if(acts[k]){e.preventDefault();acts[k]();}
 });
@@ -1038,6 +1137,7 @@ function fillDashFilters(){
   const tmap=Object.fromEntries(TEAMS.map(t=>[t.id,t.name]));
   $("#fGames").innerHTML=GAMES.map(g=>`<option value="${g.id}">${esc(g.date)} ${g.home?"vs":"@"} ${esc(tmap[g.opponent_id]??"?")}</option>`).join("");
   $("#hPlayer").innerHTML=`<option value="0">All players</option>`+PLAYERS.map(p=>`<option value="${p.id}">${p.number??"?"} ${esc(p.name)}</option>`).join("");
+  $("#pairPlayer").innerHTML=`<option value="0">Top 30 pairs</option>`+PLAYERS.map(p=>`<option value="${p.id}">${p.number??"?"} ${esc(p.name)}</option>`).join("");
 }
 let DASH=null;
 async function loadDash(){
@@ -1069,7 +1169,9 @@ function renderDash(){
     <tr><td>Shooting %</td><td>${t.sh_pct}%</td><td></td></tr>
     <tr><td>PP</td><td>${t.ppg} G / ${t.pp_opps} opps (${t.pp_pct}%)</td><td>SOG per PP: ${t.shots_per_pp}</td></tr>
     <tr><td>PK</td><td>${t.sh_times-t.ppga} killed / ${t.sh_times} (${t.pk_pct}%)</td><td>GA on PK: ${t.ppga}</td></tr>
-    <tr><td>Penalties (zone O/N/D)</td><td>${t.pens_zone.off} / ${t.pens_zone.neu} / ${t.pens_zone.def}</td><td>PIM ${t.pim}</td></tr>`;
+    <tr><td>Penalties (zone O/N/D)</td><td>${t.pens_zone.off} / ${t.pens_zone.neu} / ${t.pens_zone.def}</td><td>PIM ${t.pim}</td></tr>
+    <tr><td>Faceoffs</td><td>${t.fo_w} W / ${t.fo_l} L (${t.fo_pct}%)</td><td></td></tr>
+    <tr><td>Zone entries / exits (controlled)</td><td>${t.entries} (${t.entries_ctrl})</td><td>${t.exits} (${t.exits_ctrl})</td></tr>`;
   const periods=Object.keys(t.by_period).sort();
   const mx=Math.max(1,...periods.flatMap(p=>[t.by_period[p].sf,t.by_period[p].sa]));
   $("#periodBars").innerHTML=periods.map(p=>{const d=t.by_period[p];return `
@@ -1084,13 +1186,51 @@ function renderDash(){
       <td>${p.p60}</td><td>${p.s60_5v5}</td><td>${p.sf_on}</td><td>${p.sa_on}</td><td>${p.gf_on}</td><td>${p.ga_on}</td></tr>`).join("")
     ||`<tr><td colspan="25" class="hint">No data in the current filter.</td></tr>`;
   const tg=DASH.together||{units:[],pairs:[]};
-  $("#unitsTbl").innerHTML="<tr><th>Line</th><th>Players</th><th>TOI together</th><th>GF</th><th>GA</th></tr>"+
-    (tg.units.map(u=>`<tr><td>${esc(u.line)}</td><td>${esc(u.players)}</td><td>${TOI(u.toi)}</td><td>${u.gf}</td><td>${u.ga}</td></tr>`).join("")
-     ||`<tr><td colspan="5" class="hint">no lines defined / no lineup data in filter</td></tr>`);
-  $("#pairsTbl").innerHTML="<tr><th>Pair</th><th>TOI together</th><th>GF</th><th>GA</th></tr>"+
-    (tg.pairs.map(p=>`<tr><td>${esc(p.players)}</td><td>${TOI(p.toi)}</td><td>${p.gf}</td><td>${p.ga}</td></tr>`).join("")
-     ||`<tr><td colspan="4" class="hint">no lineup data</td></tr>`);
+  const p60=(n,toi)=>toi?(n*3600/toi).toFixed(2):"0";
+  $("#unitsTbl").innerHTML="<tr><th>Line</th><th>Players</th><th>TOI together</th><th>GF</th><th>GA</th><th>GF/60</th><th>GA/60</th></tr>"+
+    (tg.units.map(u=>`<tr><td>${esc(u.line)}</td><td>${esc(u.players)}</td><td>${TOI(u.toi)}</td><td>${u.gf}</td><td>${u.ga}</td><td>${p60(u.gf,u.toi)}</td><td>${p60(u.ga,u.toi)}</td></tr>`).join("")
+     ||`<tr><td colspan="7" class="hint">no lines defined / no lineup data in filter</td></tr>`);
+  const focus=+$("#pairPlayer").value;
+  const pairs=focus?tg.pairs.filter(p=>p.ids.includes(focus)):tg.pairs.slice(0,30);
+  $("#pairsTbl").innerHTML="<tr><th>Pair</th><th>TOI together</th><th>GF</th><th>GA</th><th>GF/60</th><th>GA/60</th></tr>"+
+    (pairs.map(p=>`<tr><td>${esc(p.players)}</td><td>${TOI(p.toi)}</td><td>${p.gf}</td><td>${p.ga}</td><td>${p60(p.gf,p.toi)}</td><td>${p60(p.ga,p.toi)}</td></tr>`).join("")
+     ||`<tr><td colspan="6" class="hint">no lineup data</td></tr>`);
+  const xs=DASH.extras||[];
+  $("#extrasCard").hidden=!xs.length;
+  $("#extrasTbl").innerHTML="<tr><th>#</th><th>Player</th><th>FO taken</th><th>FO won</th><th>FO %</th><th>Entries</th><th>ctrl</th><th>Exits</th><th>ctrl</th></tr>"+
+    xs.map(r=>`<tr><td>${r.number??""}</td><td>${esc(r.name)}</td><td>${r.fo_t}</td><td>${r.fo_w}</td><td>${r.fo_pct}</td>
+      <td>${r.en}</td><td>${r.en_ctrl}</td><td>${r.ex}</td><td>${r.ex_ctrl}</td></tr>`).join("");
+  renderShifts();
   drawMaps();
+}
+$("#pairPlayer").onchange=()=>DASH&&renderDash();
+function renderShifts(){
+  const sc=$("#shiftChart"), d=DASH.shifts;
+  const pids=d?Object.keys(d.by_player).map(Number):[];
+  if(!pids.length){
+    sc.setAttribute("viewBox","0 0 400 16");
+    sc.innerHTML=`<text x="4" y="11" style="font-size:8px;fill:var(--ink3)">select exactly one game (with line changes logged) in the filters to see the shift timeline</text>`;
+    return;
+  }
+  const pm=PBYID();
+  pids.sort((a,b)=>((pm[a]||{}).number??99)-((pm[b]||{}).number??99));
+  const W=1000,label=110,rowH=16,H=pids.length*rowH+26;
+  const xOf=t=>label+(W-label-8)*t/d.end;
+  const at=t=>{const p=Math.min(4,Math.floor(t/d.plen)+1);return `${p===4?"OT":"P"+p} ${mmss(d.plen-(t-(p-1)*d.plen))}`;};
+  let grid=`<text x="${label}" y="12" style="font-size:9px;fill:var(--ink3)">P1</text>`;
+  for(let k=1;k*d.plen<d.end;k++)
+    grid+=`<line x1="${xOf(k*d.plen)}" y1="16" x2="${xOf(k*d.plen)}" y2="${H-2}" stroke="var(--grid)"/>
+      <text x="${xOf(k*d.plen)+3}" y="12" style="font-size:9px;fill:var(--ink3)">${k===3?"OT":"P"+(k+1)}</text>`;
+  let rows="";
+  pids.forEach((pid,i)=>{
+    const y=20+i*rowH, p=pm[pid];
+    rows+=`<text x="4" y="${y+9}" style="font-size:10px;fill:var(--ink2)">${p?esc((p.number??"?")+" "+p.name.split(" ").pop()):pid}</text>`;
+    for(const [s,e] of d.by_player[pid])
+      rows+=`<rect x="${xOf(s)}" y="${y}" width="${Math.max(1.5,xOf(e)-xOf(s))}" height="10" rx="2" fill="var(--us)">
+        <title>${at(s)} → ${at(e)} · ${Math.round(e-s)} s</title></rect>`;
+  });
+  sc.setAttribute("viewBox",`0 0 ${W} ${H}`);
+  sc.innerHTML=grid+rows;
 }
 ["hTeam","hPlayer","hResult","hMode","hDist"].forEach(id=>$("#"+id).onchange=drawMaps);
 const RESCOLOR={goal:"var(--goal)",on_goal:"var(--us)",missed:"var(--miss)",blocked:"var(--block)"};

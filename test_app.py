@@ -124,6 +124,27 @@ def main():
     assert client.get(f"/api/stats?game_ids={g1}").json()["team"]["pp_opps"] == 2
     assert client.delete(f"/api/events/{mk['id']}").status_code == 200
 
+    # faceoffs + zone entries/exits (quick extras) + shift chart + game flags
+    ev(g1, "faceoff", "us", 1195, player_id=a)          # won, taken by A
+    ev(g1, "faceoff", "opp", 1000)                      # lost
+    ev(g1, "entry", "us", 950, player_id=a, detail="controlled")
+    ev(g1, "entry", "us", 940, player_id=b, detail="uncontrolled")
+    ev(g1, "exit", "us", 930, player_id=c, detail="controlled")
+    sx = client.get(f"/api/stats?game_ids={g1}").json()
+    tx = sx["team"]
+    assert (tx["fo_w"], tx["fo_l"], tx["fo_pct"]) == (1, 1, 50.0)
+    assert (tx["entries"], tx["entries_ctrl"], tx["exits"], tx["exits_ctrl"]) == (2, 1, 1, 1)
+    XA = {r["player_id"]: r for r in sx["extras"]}
+    assert (XA[a]["fo_t"], XA[a]["fo_w"], XA[a]["fo_pct"], XA[a]["en"]) == (1, 1, 100.0, 1)
+    assert XA[c]["ex_ctrl"] == 1
+    # single-game filter -> per-player shift intervals; A's two snapshots merge to one shift
+    assert sx["shifts"] and sx["shifts"]["by_player"][str(a)] == [[0, 3600]]
+    assert sx["shifts"]["by_player"][str(b)] == [[0, 200]]
+    assert all("ids" in p for p in sx["together"]["pairs"])
+    flags = client.get("/api/game_flags").json()[str(g1)]
+    assert flags["shot"] == 5 and flags["lineup"] == 2 and flags["faceoff"] == 2
+    assert flags["entry"] == 2 and flags["exit"] == 1 and "todo" not in flags
+
     # --- game 2: opponent PP goal ends OUR minor ---
     g2 = post("/api/games", {"opponent_id": opp["id"], "period_len": 1200})["id"]
     ev(g2, "penalty", "us", 1100, player_id=c, pim=2)                    # t=100
@@ -133,6 +154,7 @@ def main():
     assert (s2["team"]["sh_times"], s2["team"]["ppga"], s2["team"]["pk_pct"]) == (1, 1, 0.0)
     states = {(sh["result"], sh["state"]) for sh in s2["shots"]}
     assert ("goal", "pk") in states and ("on_goal", "5v5") in states
+    assert client.get("/api/stats").json()["shifts"] is None  # multi-game: no shift chart
 
     # xG calibrated to published NHL anchors: crease ~.20, slot ~.10, point ~.02
     assert 0.17 < appmod.xg_value(181, 42.5) < 0.24

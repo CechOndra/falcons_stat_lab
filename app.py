@@ -46,7 +46,8 @@ CREATE TABLE IF NOT EXISTS games(
 CREATE TABLE IF NOT EXISTS events(
   id INTEGER PRIMARY KEY,
   game_id INTEGER NOT NULL REFERENCES games(id),
-  type TEXT NOT NULL CHECK(type IN ('shot','penalty','lineup','override','marker')),
+  type TEXT NOT NULL CHECK(type IN ('shot','penalty','lineup','override','marker',
+                                    'faceoff','entry','exit')),
   team TEXT DEFAULT 'us' CHECK(team IN ('us','opp')),
   period INTEGER NOT NULL,
   clock INTEGER NOT NULL,        -- seconds REMAINING in the period, as on the scoreboard
@@ -60,6 +61,7 @@ CREATE TABLE IF NOT EXISTS events(
   on_ice TEXT,                   -- ponytail: JSON player-id list; join table if per-player SQL ever needed
   override TEXT,                 -- '5v5'|'pp'|'pk'|'auto' manual game-state override
   note TEXT DEFAULT '',          -- free text; markers use it ("faceoff", "check this")
+  detail TEXT,                   -- entry/exit: 'controlled'|'uncontrolled'
   created_at TEXT DEFAULT (datetime('now')));
 CREATE INDEX IF NOT EXISTS ev_game ON events(game_id);
 """
@@ -76,7 +78,7 @@ COLS = {
     "events": ["game_id", "type", "team", "period", "clock", "video_ts", "video_idx",
                "player_id", "x", "y", "result", "blocker_id", "assist1_id",
                "assist2_id", "net_x", "net_y", "screen_id", "pim", "zone",
-               "on_ice", "override", "note"],
+               "on_ice", "override", "note", "detail"],
 }
 
 
@@ -95,13 +97,11 @@ def seed():
     except sqlite3.OperationalError:
         pass
     row = con.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='events'").fetchone()
-    if row and "'marker'" not in row["sql"]:  # rebuild events for the marker type + note column
-        cols = ("game_id,type,team,period,clock,video_ts,video_idx,player_id,x,y,result,"
-                "blocker_id,assist1_id,assist2_id,net_x,net_y,screen_id,pim,zone,on_ice,"
-                "override,created_at")
+    if row and "'faceoff'" not in row["sql"]:  # rebuild events for newer event types/columns
         con.execute("PRAGMA foreign_keys=OFF")
         con.executescript("ALTER TABLE events RENAME TO events_old;" + SCHEMA)
-        con.execute(f"INSERT INTO events(id,{cols}) SELECT id,{cols} FROM events_old")
+        cols = ",".join(r[1] for r in con.execute("PRAGMA table_info(events_old)"))
+        con.execute(f"INSERT INTO events({cols}) SELECT {cols} FROM events_old")
         con.execute("DROP TABLE events_old")
         con.commit()
         con.execute("PRAGMA foreign_keys=ON")
@@ -157,6 +157,22 @@ async def roster_csv(request: Request):
     con.commit()
     con.close()
     return {"imported": n}
+
+
+@app.get("/api/game_flags")
+def game_flags():
+    """Per-game logging completeness: counts by event family + open 'needs info' items."""
+    con = db()
+    out = {}
+    for r in con.execute("SELECT game_id, type, COUNT(*) n FROM events GROUP BY game_id, type"):
+        out.setdefault(r["game_id"], {})[r["type"]] = r["n"]
+    for r in con.execute("""SELECT game_id, COUNT(*) n FROM events
+                            WHERE type='marker' OR (type='shot' AND
+                              (x IS NULL OR (team='us' AND player_id IS NULL)))
+                            GROUP BY game_id"""):
+        out.setdefault(r["game_id"], {})["todo"] = r["n"]
+    con.close()
+    return out
 
 
 @app.get("/api/me")
@@ -310,11 +326,17 @@ def analyze_game(game, evs):
 
     # TOI + together-TOI: lineup snapshot i holds until snapshot i+1 (or game end)
     lineups = [e for e in evs if e["type"] == "lineup"]
-    toi, onice, pairs, units = {}, {}, {}, {}
+    toi, onice, pairs, units, shifts = {}, {}, {}, {}, {}
     for i, lu in enumerate(lineups):
         start = lu["t"]
         end = lineups[i + 1]["t"] if i + 1 < len(lineups) else game_end
         ids = json.loads(lu["on_ice"] or "[]")
+        for pid in ids:  # per-player shift intervals (merged when back-to-back)
+            iv = shifts.setdefault(pid, [])
+            if iv and iv[-1][1] == start:
+                iv[-1][1] = min(end, game_end)
+            else:
+                iv.append([start, min(end, game_end)])
         for s, e, st in segs:
             dur = min(e, end) - max(s, start)
             if dur <= 0:
@@ -364,7 +386,8 @@ def analyze_game(game, evs):
                     units[(key, mem)][gk] += 1
 
     return {"shots": shots, "pens": pens, "pp_opps": pp_opps, "sh_times": sh_times,
-            "toi": toi, "onice": onice, "pairs": pairs, "units": units, "plen": plen}
+            "toi": toi, "onice": onice, "pairs": pairs, "units": units,
+            "shifts": shifts, "game_end": game_end, "plen": plen}
 
 
 @app.get("/api/stats")
@@ -388,10 +411,18 @@ def stats(season_id: int = 0, game_ids: str = "", opponent_id: int = 0,
             "xg_f": 0.0, "xg_a": 0.0, "xgot_f": 0.0, "xgot_a": 0.0,
             "slot_f": 0, "slot_a": 0, "pp_opps": 0, "ppg": 0, "sh_times": 0,
             "ppga": 0, "pp_sog": 0, "pens_zone": {"off": 0, "neu": 0, "def": 0},
-            "pim": 0, "by_period": {}}
+            "pim": 0, "by_period": {},
+            "fo_w": 0, "fo_l": 0, "entries": 0, "entries_ctrl": 0,
+            "exits": 0, "exits_ctrl": 0}
     pstats = {}
     all_shots = []
     pairs_all, units_all = {}, {}
+    xrows = {}  # per-player faceoff / entry / exit counts
+    shifts_out = None
+
+    def xrow(pid):
+        return xrows.setdefault(pid, {"fo_t": 0, "fo_w": 0, "en": 0, "en_ctrl": 0,
+                                      "ex": 0, "ex_ctrl": 0})
 
     def prow(pid):
         if pid not in pstats:
@@ -426,6 +457,33 @@ def stats(season_id: int = 0, game_ids: str = "", opponent_id: int = 0,
         for k, d in a["units"].items():
             u = units_all.setdefault(k, {"toi": 0, "gf": 0, "ga": 0})
             u["toi"] += d["toi"]; u["gf"] += d["gf"]; u["ga"] += d["ga"]
+        if len(games) == 1:
+            shifts_out = {"plen": a["plen"], "end": a["game_end"], "by_player": a["shifts"]}
+
+        for e2 in evs:  # faceoffs / zone entries / exits (quick-logged extras)
+            if e2["type"] not in ("faceoff", "entry", "exit"):
+                continue
+            if period and e2["period"] != period:
+                continue
+            if e2["type"] == "faceoff":
+                team["fo_w" if e2["team"] == "us" else "fo_l"] += 1
+                if e2["player_id"]:
+                    r = xrow(e2["player_id"])
+                    r["fo_t"] += 1
+                    if e2["team"] == "us":
+                        r["fo_w"] += 1
+            else:
+                key = "entries" if e2["type"] == "entry" else "exits"
+                ctrl = e2["detail"] == "controlled"
+                team[key] += 1
+                if ctrl:
+                    team[key + "_ctrl"] += 1
+                if e2["player_id"]:
+                    r = xrow(e2["player_id"])
+                    pk2 = "en" if e2["type"] == "entry" else "ex"
+                    r[pk2] += 1
+                    if ctrl:
+                        r[pk2 + "_ctrl"] += 1
 
         for sh in a["shots"]:
             if sh["team"] == "us" and sh["result"] == "goal" and sh["state"] == "pp":
@@ -499,6 +557,8 @@ def stats(season_id: int = 0, game_ids: str = "", opponent_id: int = 0,
     team["xg_a"] = round(team["xg_a"], 2)
     team["xgot_f"] = round(team["xgot_f"], 2)
     team["xgot_a"] = round(team["xgot_a"], 2)
+    fo_total = team["fo_w"] + team["fo_l"]
+    team["fo_pct"] = round(100 * team["fo_w"] / fo_total, 1) if fo_total else 0
 
     out = []
     for r in pstats.values():
@@ -517,20 +577,29 @@ def stats(season_id: int = 0, game_ids: str = "", opponent_id: int = 0,
 
     is_g = lambda pid: (players.get(pid) or {}).get("position", "").upper() == "G"
     pairs_out = sorted(
-        [{"players": f"{tag(a)} + {tag(b)}", "toi": v["toi"], "gf": v["gf"], "ga": v["ga"]}
+        [{"ids": [a, b], "players": f"{tag(a)} + {tag(b)}",
+          "toi": v["toi"], "gf": v["gf"], "ga": v["ga"]}
          for (a, b), v in pairs_all.items() if not (is_g(a) or is_g(b))],
-        key=lambda r: -r["toi"])[:30]
+        key=lambda r: -r["toi"])
     units_out = sorted(
         [{"line": key, "players": ", ".join(tag(p) for p in sorted(mem)),
           "toi": v["toi"], "gf": v["gf"], "ga": v["ga"]}
          for (key, mem), v in units_all.items()],
         key=lambda r: (r["line"], -r["toi"]))
 
+    extras_out = sorted(
+        [dict(r, player_id=pid, number=(players.get(pid) or {}).get("number"),
+              name=(players.get(pid) or {}).get("name", str(pid)),
+              fo_pct=round(100 * r["fo_w"] / r["fo_t"], 1) if r["fo_t"] else 0)
+         for pid, r in xrows.items()],
+        key=lambda r: -(r["fo_t"] + r["en"] + r["ex"]))
+
     return {"games": [{"id": g["id"], "opponent_id": g["opponent_id"], "date": g["date"],
                        "home": g["home"], "score_us": g["score_us"],
                        "score_opp": g["score_opp"]} for g in games],
             "team": team, "players": out, "shots": all_shots,
-            "together": {"pairs": pairs_out, "units": units_out}}
+            "together": {"pairs": pairs_out, "units": units_out},
+            "extras": extras_out, "shifts": shifts_out}
 
 
 # ---------------------------------------------------------------- generic CRUD
