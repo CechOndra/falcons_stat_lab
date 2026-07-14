@@ -141,6 +141,15 @@ def main():
     assert sx["shifts"] and sx["shifts"]["by_player"][str(a)] == [[0, 3600]]
     assert sx["shifts"]["by_player"][str(b)] == [[0, 200]]
     assert all("ids" in p for p in sx["together"]["pairs"])
+
+    # clock history + quick-stamp stubs: stored, stats-neutral
+    ev(g1, "clock", "us", 1190, detail="stop")
+    stub = ev(g1, "marker", "us", 1180, note="Faceoff", detail="faceoff")
+    s4 = client.get(f"/api/stats?game_ids={g1}").json()["team"]
+    assert (s4["sog_f"], s4["fo_w"]) == (3, 1)  # neither event counts anywhere
+    assert stub["detail"] == "faceoff"
+    for eid in (stub["id"],):
+        client.delete(f"/api/events/{eid}")
     flags = client.get("/api/game_flags").json()[str(g1)]
     assert flags["shot"] == 5 and flags["lineup"] == 2 and flags["faceoff"] == 2
     assert flags["entry"] == 2 and flags["exit"] == 1 and "todo" not in flags

@@ -191,6 +191,18 @@ play counts and control rates. Games that contain these events get a small
 icon in the games list (◉ faceoffs, ⇥ entries, ⇤ exits) so you can see at a
 glance which games carry which stats.
 
+**Quick logging (per-event, Setup → Quick logging)** — any loggable event
+type can be switched to "quick by default": pressing its key then saves an
+instant stub (type + game/video time, no panel, video keeps playing) instead
+of opening the panel. Holding **Shift** with the key does the opposite of
+the default — so with faceoffs set to quick, `F` stamps a stub and
+`Shift+F` opens the full panel. Editing a stub (✎) opens its proper panel
+directly, prefilled at the original time. **`Shift+K`** is the one-press
+whistle: stops the game clock *and* drops a "whistle" marker (these don't
+count as unfinished work). Every `K`/`Shift+K` press is also recorded
+invisibly as clock history — that's what will drive video cutting and
+replay-aware highlight clips later.
+
 **Quick marker (`N`)** — for when something happened but you don't want to
 stop: one keypress stamps the game time and video time, nothing else, and the
 video keeps playing. Later, click ✎ on the marker to add a note ("faceoff",
