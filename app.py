@@ -38,6 +38,7 @@ CREATE TABLE IF NOT EXISTS games(
   score_us INTEGER DEFAULT 0, score_opp INTEGER DEFAULT 0,
   period_len INTEGER DEFAULT 1200,
   roster TEXT DEFAULT '[]',      -- ponytail: JSON player-id list; join table when multi-team/auth lands
+  lines TEXT DEFAULT '{}',       -- JSON {player_id: "F1".."F4"|"D1".."D3"|"G"}; unassigned = extras
   video_files TEXT DEFAULT '[]', -- JSON [{name,period}] - browsers can't reopen local files, names drive the re-select prompt
   last_video_pos REAL DEFAULT 0, last_video_idx INTEGER DEFAULT 0,
   calibration TEXT DEFAULT 'null',
@@ -45,7 +46,8 @@ CREATE TABLE IF NOT EXISTS games(
 CREATE TABLE IF NOT EXISTS events(
   id INTEGER PRIMARY KEY,
   game_id INTEGER NOT NULL REFERENCES games(id),
-  type TEXT NOT NULL CHECK(type IN ('shot','penalty','lineup','override')),
+  type TEXT NOT NULL CHECK(type IN ('shot','penalty','lineup','override','marker',
+                                    'faceoff','entry','exit')),
   team TEXT DEFAULT 'us' CHECK(team IN ('us','opp')),
   period INTEGER NOT NULL,
   clock INTEGER NOT NULL,        -- seconds REMAINING in the period, as on the scoreboard
@@ -58,6 +60,8 @@ CREATE TABLE IF NOT EXISTS events(
   pim REAL, zone TEXT CHECK(zone IN ('off','neu','def')),
   on_ice TEXT,                   -- ponytail: JSON player-id list; join table if per-player SQL ever needed
   override TEXT,                 -- '5v5'|'pp'|'pk'|'auto' manual game-state override
+  note TEXT DEFAULT '',          -- free text; markers use it ("faceoff", "check this")
+  detail TEXT,                   -- entry/exit: 'controlled'|'uncontrolled'
   created_at TEXT DEFAULT (datetime('now')));
 CREATE INDEX IF NOT EXISTS ev_game ON events(game_id);
 """
@@ -69,12 +73,12 @@ COLS = {
     "players": ["number", "name", "position", "photo", "active"],
     "users": ["name", "role", "player_id"],
     "games": ["season_id", "opponent_id", "date", "home", "score_us", "score_opp",
-              "period_len", "roster", "video_files", "last_video_pos",
+              "period_len", "roster", "lines", "video_files", "last_video_pos",
               "last_video_idx", "calibration", "notes"],
     "events": ["game_id", "type", "team", "period", "clock", "video_ts", "video_idx",
                "player_id", "x", "y", "result", "blocker_id", "assist1_id",
                "assist2_id", "net_x", "net_y", "screen_id", "pim", "zone",
-               "on_ice", "override"],
+               "on_ice", "override", "note", "detail"],
 }
 
 
@@ -88,6 +92,19 @@ def db():
 def seed():
     con = db()
     con.executescript(SCHEMA)
+    try:  # migration for DBs created before per-game lines existed
+        con.execute("ALTER TABLE games ADD COLUMN lines TEXT DEFAULT '{}'")
+    except sqlite3.OperationalError:
+        pass
+    row = con.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='events'").fetchone()
+    if row and "'faceoff'" not in row["sql"]:  # rebuild events for newer event types/columns
+        con.execute("PRAGMA foreign_keys=OFF")
+        con.executescript("ALTER TABLE events RENAME TO events_old;" + SCHEMA)
+        cols = ",".join(r[1] for r in con.execute("PRAGMA table_info(events_old)"))
+        con.execute(f"INSERT INTO events({cols}) SELECT {cols} FROM events_old")
+        con.execute("DROP TABLE events_old")
+        con.commit()
+        con.execute("PRAGMA foreign_keys=ON")
     if not con.execute("SELECT 1 FROM seasons LIMIT 1").fetchone():
         con.execute("INSERT INTO seasons(name) VALUES ('2025/26')")
     if not con.execute("SELECT 1 FROM users LIMIT 1").fetchone():
@@ -99,6 +116,17 @@ def seed():
                 for row in csv.DictReader(f):
                     con.execute("INSERT OR IGNORE INTO teams(name) VALUES (?)",
                                 (row["name"].strip(),))
+    if not con.execute("SELECT 1 FROM players LIMIT 1").fetchone():
+        # real names from the team lineup sheet; jersey numbers are placeholders
+        path = os.path.join(HERE, "seed", "roster_template.csv")
+        if os.path.exists(path):
+            with open(path, encoding="utf-8") as f:
+                for row in csv.DictReader(f):
+                    if (row.get("name") or "").strip():
+                        num = (row.get("number") or "").strip()
+                        con.execute("INSERT INTO players(number,name,position) VALUES (?,?,?)",
+                                    (int(num) if num.isdigit() else None,
+                                     row["name"].strip(), (row.get("position") or "").strip()))
     con.commit()
     con.close()
 
@@ -131,6 +159,22 @@ async def roster_csv(request: Request):
     return {"imported": n}
 
 
+@app.get("/api/game_flags")
+def game_flags():
+    """Per-game logging completeness: counts by event family + open 'needs info' items."""
+    con = db()
+    out = {}
+    for r in con.execute("SELECT game_id, type, COUNT(*) n FROM events GROUP BY game_id, type"):
+        out.setdefault(r["game_id"], {})[r["type"]] = r["n"]
+    for r in con.execute("""SELECT game_id, COUNT(*) n FROM events
+                            WHERE type='marker' OR (type='shot' AND
+                              (x IS NULL OR (team='us' AND player_id IS NULL)))
+                            GROUP BY game_id"""):
+        out.setdefault(r["game_id"], {})["todo"] = r["n"]
+    con.close()
+    return out
+
+
 @app.get("/api/me")
 def me():
     # ponytail: auth is phase 2; everyone is the seeded admin for now
@@ -141,21 +185,60 @@ def me():
 
 
 
-# ---------------------------------------------------------------- xG model
-# ponytail: naive logistic xG from shot distance (ft) and angle off the net axis
-# (rad). Coefficients hand-tuned for amateur hockey: ~35% point blank in the
-# slot, ~5% from the circles, ~1% from the blue line. Swap this function to
-# upgrade the model - it is the only place xG is computed.
+# ---------------------------------------------------------------- xG / xGOT
+# Logistic distance+angle models, least-squares fitted to published NHL
+# location values (league SOG sh% ~7.2% 22-23; crease ~15-25%; slot 10-15%;
+# perimeter 2-4%; slot = 15-30 ft / 20-40 deg). Sources in MANUAL.md.
+# Swap these functions to upgrade the models - the only place xG lives.
 NET_X, NET_Y = 189.0, 42.5
+
+# NHL "house" / home plate: posts -> faceoff dots -> across the top of circles
+HOUSE = [(189, 39.5), (169, 20.5), (154, 20.5), (154, 64.5), (169, 64.5), (189, 45.5)]
+
+
+def in_slot(x, y):
+    if x is None or y is None:
+        return False
+    inside = False
+    for i in range(len(HOUSE)):
+        x1, y1 = HOUSE[i]
+        x2, y2 = HOUSE[(i + 1) % len(HOUSE)]
+        if (y1 > y) != (y2 > y) and x < (x2 - x1) * (y - y1) / (y2 - y1) + x1:
+            inside = not inside
+    return inside
+
+
+def _dist_angle(x, y):
+    d = math.hypot(NET_X - x, NET_Y - y)
+    a = math.atan2(abs(y - NET_Y), max(NET_X - x, 0.1))
+    return d, a
 
 
 def xg_value(x, y):
+    """P(goal | shot attempt from x,y). Fit: crease .20, slot .10, circles .04,
+    point .018, sharp-angle close .045."""
     if x is None or y is None:
         return None
-    d = math.hypot(NET_X - x, NET_Y - y)
-    a = math.atan2(abs(y - NET_Y), max(NET_X - x, 0.1))
-    z = 0.9 - 0.10 * d - 1.3 * a
+    d, a = _dist_angle(x, y)
+    z = -0.895 - 0.050 * d - 1.355 * a
     return round(1 / (1 + math.exp(-z)), 4)
+
+
+def xgot_value(x, y, net_x, net_y):
+    """P(goal | shot ON GOAL from x,y aimed at net_x,net_y % across the net).
+    Base: on-goal logistic (crease .25, slot .13, circles .055, point .025).
+    Placement factor from published shot-target effects: corners and upper net
+    beat center mass, mild five-hole bump; goalie chest/center is worst."""
+    if None in (x, y, net_x, net_y):
+        return None
+    d, a = _dist_angle(x, y)
+    base = 1 / (1 + math.exp(0.633 + 0.048 * d + 1.328 * a))
+    h = abs(net_x - 50) / 50          # 0 = center, 1 = post
+    v = 1 - net_y / 100               # 0 = along the ice, 1 = crossbar
+    m = 0.35 + 1.35 * h ** 1.5 + 0.55 * v
+    if h < 0.2 and net_y > 78:        # five-hole
+        m += 0.45
+    return round(min(1.0, base * min(m, 2.6)), 4)
 
 
 # ---------------------------------------------------------------- stats engine
@@ -210,6 +293,11 @@ def analyze_game(game, evs):
         if "state" not in e:
             e["state"] = state_at(e["t"])
         e["xg"] = xg_value(e["x"], e["y"])
+        e["slot"] = in_slot(e["x"], e["y"])
+        e["dist_m"] = round(_dist_angle(e["x"], e["y"])[0] * 0.3048, 1) \
+            if e["x"] is not None else None
+        e["xgot"] = xgot_value(e["x"], e["y"], e["net_x"], e["net_y"]) \
+            if e["result"] in ("goal", "on_goal") else None
 
     # contiguous game-state segments (for TOI split and PP/PK opportunity counts)
     bounds = sorted({0, game_end} | {iv["s"] for iv in ivs} | {iv["e"] for iv in ivs}
@@ -228,13 +316,27 @@ def analyze_game(game, evs):
     sh_times = sum(1 for seg in segs if seg[2] == "pk")
     # ponytail: a 5v3 counts as one opportunity (one contiguous pp segment)
 
-    # TOI + on-ice: lineup snapshot i holds until snapshot i+1 (or game end)
+    # defined line units (2+ members) for together-TOI; "G" is the goalie slot
+    line_map = json.loads(game.get("lines") or "{}")
+    unit_defs = {}
+    for pid, key in line_map.items():
+        if key and key != "G":
+            unit_defs.setdefault(key, set()).add(int(pid))
+    unit_defs = {k: frozenset(v) for k, v in unit_defs.items() if len(v) >= 2}
+
+    # TOI + together-TOI: lineup snapshot i holds until snapshot i+1 (or game end)
     lineups = [e for e in evs if e["type"] == "lineup"]
-    toi, onice = {}, {}
+    toi, onice, pairs, units, shifts = {}, {}, {}, {}, {}
     for i, lu in enumerate(lineups):
         start = lu["t"]
         end = lineups[i + 1]["t"] if i + 1 < len(lineups) else game_end
         ids = json.loads(lu["on_ice"] or "[]")
+        for pid in ids:  # per-player shift intervals (merged when back-to-back)
+            iv = shifts.setdefault(pid, [])
+            if iv and iv[-1][1] == start:
+                iv[-1][1] = min(end, game_end)
+            else:
+                iv.append([start, min(end, game_end)])
         for s, e, st in segs:
             dur = min(e, end) - max(s, start)
             if dur <= 0:
@@ -243,6 +345,18 @@ def analyze_game(game, evs):
                 d = toi.setdefault(pid, {"total": 0, "5v5": 0, "pp": 0, "pk": 0})
                 d["total"] += dur
                 d[st] += dur
+        full = max(0, min(end, game_end) - start)
+        if full:
+            sids = sorted(ids)
+            for x in range(len(sids)):
+                for y in range(x + 1, len(sids)):
+                    p = pairs.setdefault((sids[x], sids[y]), {"toi": 0, "gf": 0, "ga": 0})
+                    p["toi"] += full
+            idset = set(ids)
+            for key, mem in unit_defs.items():
+                if mem <= idset:
+                    u = units.setdefault((key, mem), {"toi": 0, "gf": 0, "ga": 0})
+                    u["toi"] += full
     times = [lu["t"] for lu in lineups]
     for sh in shots:
         if sh["result"] not in ("goal", "on_goal"):
@@ -253,14 +367,27 @@ def analyze_game(game, evs):
                 idx = i
         if idx is None:
             continue
-        for pid in json.loads(lineups[idx]["on_ice"] or "[]"):
+        ids = json.loads(lineups[idx]["on_ice"] or "[]")
+        for pid in ids:
             d = onice.setdefault(pid, {"sf": 0, "sa": 0, "gf": 0, "ga": 0})
             d["sf" if sh["team"] == "us" else "sa"] += 1
             if sh["result"] == "goal":
                 d["gf" if sh["team"] == "us" else "ga"] += 1
+        if sh["result"] == "goal":
+            gk = "gf" if sh["team"] == "us" else "ga"
+            sids = sorted(ids)
+            for x in range(len(sids)):
+                for y in range(x + 1, len(sids)):
+                    if (sids[x], sids[y]) in pairs:
+                        pairs[(sids[x], sids[y])][gk] += 1
+            idset = set(ids)
+            for key, mem in unit_defs.items():
+                if mem <= idset and (key, mem) in units:
+                    units[(key, mem)][gk] += 1
 
     return {"shots": shots, "pens": pens, "pp_opps": pp_opps, "sh_times": sh_times,
-            "toi": toi, "onice": onice, "plen": plen}
+            "toi": toi, "onice": onice, "pairs": pairs, "units": units,
+            "shifts": shifts, "game_end": game_end, "plen": plen}
 
 
 @app.get("/api/stats")
@@ -281,11 +408,21 @@ def stats(season_id: int = 0, game_ids: str = "", opponent_id: int = 0,
     players = {r["id"]: dict(r) for r in con.execute("SELECT * FROM players")}
 
     team = {"gf": 0, "ga": 0, "sog_f": 0, "sog_a": 0, "att_f": 0, "att_a": 0,
-            "xg_f": 0.0, "xg_a": 0.0, "pp_opps": 0, "ppg": 0, "sh_times": 0,
+            "xg_f": 0.0, "xg_a": 0.0, "xgot_f": 0.0, "xgot_a": 0.0,
+            "slot_f": 0, "slot_a": 0, "pp_opps": 0, "ppg": 0, "sh_times": 0,
             "ppga": 0, "pp_sog": 0, "pens_zone": {"off": 0, "neu": 0, "def": 0},
-            "pim": 0, "by_period": {}}
+            "pim": 0, "by_period": {},
+            "fo_w": 0, "fo_l": 0, "entries": 0, "entries_ctrl": 0,
+            "exits": 0, "exits_ctrl": 0}
     pstats = {}
     all_shots = []
+    pairs_all, units_all = {}, {}
+    xrows = {}  # per-player faceoff / entry / exit counts
+    shifts_out = None
+
+    def xrow(pid):
+        return xrows.setdefault(pid, {"fo_t": 0, "fo_w": 0, "en": 0, "en_ctrl": 0,
+                                      "ex": 0, "ex_ctrl": 0})
 
     def prow(pid):
         if pid not in pstats:
@@ -293,7 +430,7 @@ def stats(season_id: int = 0, game_ids: str = "", opponent_id: int = 0,
             pstats[pid] = {"player_id": pid, "number": p.get("number"),
                            "name": p.get("name", f"#{pid}"), "position": p.get("position", ""),
                            "gp": 0, "g": 0, "a": 0, "sog": 0, "att": 0, "blk": 0,
-                           "pen": 0, "pim": 0, "screens": 0, "xg": 0.0,
+                           "pen": 0, "pim": 0, "screens": 0, "xg": 0.0, "xgot": 0.0,
                            "toi": 0, "toi_5v5": 0, "toi_pp": 0, "toi_pk": 0,
                            "sf_on": 0, "sa_on": 0, "gf_on": 0, "ga_on": 0,
                            "sog_5v5": 0}
@@ -314,6 +451,39 @@ def stats(season_id: int = 0, game_ids: str = "", opponent_id: int = 0,
             r = prow(pid)
             r["sf_on"] += d["sf"]; r["sa_on"] += d["sa"]
             r["gf_on"] += d["gf"]; r["ga_on"] += d["ga"]
+        for k, d in a["pairs"].items():
+            p = pairs_all.setdefault(k, {"toi": 0, "gf": 0, "ga": 0})
+            p["toi"] += d["toi"]; p["gf"] += d["gf"]; p["ga"] += d["ga"]
+        for k, d in a["units"].items():
+            u = units_all.setdefault(k, {"toi": 0, "gf": 0, "ga": 0})
+            u["toi"] += d["toi"]; u["gf"] += d["gf"]; u["ga"] += d["ga"]
+        if len(games) == 1:
+            shifts_out = {"plen": a["plen"], "end": a["game_end"], "by_player": a["shifts"]}
+
+        for e2 in evs:  # faceoffs / zone entries / exits (quick-logged extras)
+            if e2["type"] not in ("faceoff", "entry", "exit"):
+                continue
+            if period and e2["period"] != period:
+                continue
+            if e2["type"] == "faceoff":
+                team["fo_w" if e2["team"] == "us" else "fo_l"] += 1
+                if e2["player_id"]:
+                    r = xrow(e2["player_id"])
+                    r["fo_t"] += 1
+                    if e2["team"] == "us":
+                        r["fo_w"] += 1
+            else:
+                key = "entries" if e2["type"] == "entry" else "exits"
+                ctrl = e2["detail"] == "controlled"
+                team[key] += 1
+                if ctrl:
+                    team[key + "_ctrl"] += 1
+                if e2["player_id"]:
+                    r = xrow(e2["player_id"])
+                    pk2 = "en" if e2["type"] == "entry" else "ex"
+                    r[pk2] += 1
+                    if ctrl:
+                        r[pk2 + "_ctrl"] += 1
 
         for sh in a["shots"]:
             if sh["team"] == "us" and sh["result"] == "goal" and sh["state"] == "pp":
@@ -328,12 +498,17 @@ def stats(season_id: int = 0, game_ids: str = "", opponent_id: int = 0,
                 continue
             all_shots.append({k: sh[k] for k in
                               ("game_id", "team", "player_id", "x", "y", "result",
-                               "net_x", "net_y", "state", "period", "xg")})
+                               "net_x", "net_y", "state", "period", "xg", "xgot",
+                               "slot", "dist_m")})
             for_us = sh["team"] == "us"
             on_goal = sh["result"] in ("goal", "on_goal")
             team["att_f" if for_us else "att_a"] += 1
             if sh["xg"]:
                 team["xg_f" if for_us else "xg_a"] += sh["xg"]
+            if sh["xgot"]:
+                team["xgot_f" if for_us else "xgot_a"] += sh["xgot"]
+            if sh["slot"] and on_goal:
+                team["slot_f" if for_us else "slot_a"] += 1
             bp = team["by_period"].setdefault(sh["period"], {"sf": 0, "sa": 0})
             if on_goal:
                 team["sog_f" if for_us else "sog_a"] += 1
@@ -345,6 +520,8 @@ def stats(season_id: int = 0, game_ids: str = "", opponent_id: int = 0,
                 r["att"] += 1
                 if sh["xg"]:
                     r["xg"] += sh["xg"]
+                if sh["xgot"]:
+                    r["xgot"] += sh["xgot"]
                 if on_goal:
                     r["sog"] += 1
                     if sh["state"] == "5v5":
@@ -378,20 +555,51 @@ def stats(season_id: int = 0, game_ids: str = "", opponent_id: int = 0,
     team["shots_per_pp"] = round(team["pp_sog"] / team["pp_opps"], 2) if team["pp_opps"] else 0
     team["xg_f"] = round(team["xg_f"], 2)
     team["xg_a"] = round(team["xg_a"], 2)
+    team["xgot_f"] = round(team["xgot_f"], 2)
+    team["xgot_a"] = round(team["xgot_a"], 2)
+    fo_total = team["fo_w"] + team["fo_l"]
+    team["fo_pct"] = round(100 * team["fo_w"] / fo_total, 1) if fo_total else 0
 
     out = []
     for r in pstats.values():
         r["p"] = r["g"] + r["a"]
         r["sh_pct"] = round(100 * r["g"] / r["sog"], 1) if r["sog"] else 0
         r["xg"] = round(r["xg"], 2)
+        r["xgot"] = round(r["xgot"], 2)
         r["p60"] = round(r["p"] * 3600 / r["toi"], 2) if r["toi"] else 0
         r["s60_5v5"] = round(r["sog_5v5"] * 3600 / r["toi_5v5"], 2) if r["toi_5v5"] else 0
         out.append(r)
     out.sort(key=lambda r: (-r["p"], -r["g"], r["name"]))
+
+    def tag(pid):
+        p = players.get(pid)
+        return f"#{p['number']} {p['name']}" if p else str(pid)
+
+    is_g = lambda pid: (players.get(pid) or {}).get("position", "").upper() == "G"
+    pairs_out = sorted(
+        [{"ids": [a, b], "players": f"{tag(a)} + {tag(b)}",
+          "toi": v["toi"], "gf": v["gf"], "ga": v["ga"]}
+         for (a, b), v in pairs_all.items() if not (is_g(a) or is_g(b))],
+        key=lambda r: -r["toi"])
+    units_out = sorted(
+        [{"line": key, "players": ", ".join(tag(p) for p in sorted(mem)),
+          "toi": v["toi"], "gf": v["gf"], "ga": v["ga"]}
+         for (key, mem), v in units_all.items()],
+        key=lambda r: (r["line"], -r["toi"]))
+
+    extras_out = sorted(
+        [dict(r, player_id=pid, number=(players.get(pid) or {}).get("number"),
+              name=(players.get(pid) or {}).get("name", str(pid)),
+              fo_pct=round(100 * r["fo_w"] / r["fo_t"], 1) if r["fo_t"] else 0)
+         for pid, r in xrows.items()],
+        key=lambda r: -(r["fo_t"] + r["en"] + r["ex"]))
+
     return {"games": [{"id": g["id"], "opponent_id": g["opponent_id"], "date": g["date"],
                        "home": g["home"], "score_us": g["score_us"],
                        "score_opp": g["score_opp"]} for g in games],
-            "team": team, "players": out, "shots": all_shots}
+            "team": team, "players": out, "shots": all_shots,
+            "together": {"pairs": pairs_out, "units": units_out},
+            "extras": extras_out, "shifts": shifts_out}
 
 
 # ---------------------------------------------------------------- generic CRUD

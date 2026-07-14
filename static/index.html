@@ -7,57 +7,74 @@
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='13' font-size='13'>🦅</text></svg>">
 <style>
 :root{
-  --page:#f9f9f7; --surface:#fcfcfb; --ink:#0b0b0b; --ink2:#52514e; --muted:#898781;
+  --page:#f9f9f7; --surface:#fcfcfb; --ink:#0b0b0b; --ink2:#52514e; --ink3:#6f6e69; --muted:#898781;
   --grid:#e1e0d9; --axis:#c3c2b7; --border:rgba(11,11,11,.10);
   --us:#2a78d6; --opp:#e34948; --miss:#eda100; --goal:#008300; --block:#4a3aa7;
+  --ring:color-mix(in oklab, var(--us) 25%, transparent);
 }
 @media (prefers-color-scheme: dark){
   :root{
-    --page:#0d0d0d; --surface:#1a1a19; --ink:#ffffff; --ink2:#c3c2b7; --muted:#898781;
+    --page:#0d0d0d; --surface:#1a1a19; --ink:#ffffff; --ink2:#c3c2b7; --ink3:#a5a49c; --muted:#898781;
     --grid:#2c2c2a; --axis:#383835; --border:rgba(255,255,255,.10);
     --us:#3987e5; --opp:#e66767; --miss:#c98500; --goal:#008300; --block:#9085e9;
   }
 }
 *{box-sizing:border-box}
 [hidden]{display:none !important}
-body{margin:0;font:14px/1.45 system-ui,-apple-system,"Segoe UI",sans-serif;background:var(--page);color:var(--ink)}
-nav{display:flex;gap:4px;padding:8px 14px;border-bottom:1px solid var(--grid);background:var(--surface);position:sticky;top:0;z-index:5}
-nav button{background:none;border:0;padding:7px 12px;font:inherit;color:var(--ink2);cursor:pointer;border-radius:6px}
+body{margin:0;font:14px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif;background:var(--page);color:var(--ink);-webkit-font-smoothing:antialiased}
+button,input,select,textarea{transition:background-color .15s ease-out,border-color .15s ease-out,color .15s ease-out,box-shadow .15s ease-out}
+@media (prefers-reduced-motion: reduce){*,*::before,*::after{transition:none !important;animation:none !important}}
+:focus-visible{outline:2px solid var(--us);outline-offset:1px}
+nav{display:flex;gap:2px;align-items:center;padding:8px 16px;border-bottom:1px solid var(--grid);background:var(--surface);position:sticky;top:0;z-index:5}
+nav button{background:none;border:0;padding:7px 12px;font:inherit;font-weight:500;color:var(--ink2);cursor:pointer;border-radius:7px}
+nav button:hover{background:color-mix(in oklab, var(--ink) 5%, transparent);color:var(--ink)}
 nav button.on{background:var(--us);color:#fff}
-nav .brand{font-weight:700;margin-right:12px;align-self:center}
-main{padding:14px;max-width:1280px;margin:0 auto}
+nav .brand{font-weight:700;margin-right:14px}
+main{padding:16px;max-width:1280px;margin:0 auto}
 section.tab{display:none} section.tab.on{display:block}
-h2{font-size:17px;margin:6px 0 10px} h3{font-size:14px;margin:8px 0 6px}
-.card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:12px}
-table{border-collapse:collapse;width:100%;font-variant-numeric:tabular-nums}
-th,td{text-align:left;padding:4px 8px;border-bottom:1px solid var(--grid);white-space:nowrap}
-th{color:var(--muted);font-weight:600;font-size:12px}
+h2{font-size:17px;font-weight:600;margin:4px 0 12px}
+h3{font-size:14px;font-weight:650;margin:10px 0 8px}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin-bottom:12px}
+table{border-collapse:collapse;width:100%;font-variant-numeric:tabular-nums;font-size:13.5px}
+th{text-align:left;padding:6px 8px;border-bottom:1px solid var(--axis);color:var(--ink3);font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.04em;white-space:nowrap}
+td{text-align:left;padding:5px 8px;border-bottom:1px solid var(--grid);white-space:nowrap}
 .tblwrap{overflow-x:auto}
-input,select,textarea{font:inherit;color:var(--ink);background:var(--surface);border:1px solid var(--axis);border-radius:6px;padding:5px 7px}
-input.num{width:56px}
-button{font:inherit;cursor:pointer;border-radius:6px;border:1px solid var(--axis);background:var(--surface);color:var(--ink);padding:5px 10px}
-button.pri{background:var(--us);border-color:var(--us);color:#fff}
-button.ghost{border:0;background:none;color:var(--ink2);padding:2px 6px}
-.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:6px 0}
-.hint{color:var(--muted);font-size:12px}
-kbd{background:var(--grid);border-radius:4px;padding:1px 5px;font-size:12px;font-family:inherit}
-dialog{background:var(--surface);color:var(--ink);border:1px solid var(--border);border-radius:12px;padding:16px;max-width:640px}
-dialog::backdrop{background:rgba(0,0,0,.45)}
+input,select,textarea{font:inherit;color:var(--ink);background:var(--surface);border:1px solid var(--axis);border-radius:7px;padding:5px 8px}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--us);box-shadow:0 0 0 3px var(--ring)}
+input::placeholder,textarea::placeholder{color:var(--ink3)}
+input.num{width:58px}
+button{font:inherit;cursor:pointer;border-radius:7px;border:1px solid var(--axis);background:var(--surface);color:var(--ink);padding:5px 11px}
+button:hover{background:color-mix(in oklab, var(--ink) 4%, var(--surface));border-color:var(--ink3)}
+button:active{background:color-mix(in oklab, var(--ink) 8%, var(--surface))}
+button:disabled{opacity:.5;cursor:default}
+button.pri{background:var(--us);border-color:var(--us);color:#fff;font-weight:600}
+button.pri:hover{background:color-mix(in oklab, var(--us) 86%, var(--ink));border-color:color-mix(in oklab, var(--us) 86%, var(--ink))}
+button.ghost{border-color:transparent;background:none;color:var(--ink2);padding:3px 7px}
+button.ghost:hover{background:color-mix(in oklab, var(--ink) 6%, transparent);color:var(--ink)}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:8px 0}
+.hint{color:var(--ink3);font-size:12px}
+kbd{background:var(--page);border:1px solid var(--axis);border-bottom-width:2px;border-radius:4px;padding:0 5px;font-size:12px;font-family:inherit}
+dialog{background:var(--surface);color:var(--ink);border:1px solid var(--border);border-radius:12px;padding:18px;max-width:640px;box-shadow:0 16px 48px rgba(0,0,0,.28)}
+dialog::backdrop{background:rgba(0,0,0,.5)}
+dialog h3{margin-top:0}
 .chips{display:flex;gap:6px;flex-wrap:wrap;min-height:30px}
-.chip{background:var(--grid);border-radius:14px;padding:3px 10px;font-weight:600}
+.chip{background:var(--grid);border-radius:14px;padding:3px 10px;font-weight:600;font-size:13px}
+.lubtn{padding:4px 10px;margin:2px}
+.lubtn.on{background:var(--us);border-color:var(--us);color:#fff}
+.linebtn{font-weight:700;min-width:42px}
 .grid2{display:grid;grid-template-columns:1fr 340px;gap:12px}
 @media(max-width:900px){.grid2{grid-template-columns:1fr}}
 video{width:100%;max-height:56vh;background:#000;border-radius:8px}
-.clock{font-size:30px;font-weight:700}
-.clock small{font-size:14px;color:var(--muted);font-weight:400}
+.clock{font-size:30px;font-weight:700;font-variant-numeric:tabular-nums}
+.clock small{font-size:13px;color:var(--ink3);font-weight:500}
 .stopped{color:var(--opp)}
 #evlog{max-height:44vh;overflow-y:auto}
-#evlog tr{cursor:pointer} #evlog tr:hover{background:var(--grid)}
+#evlog tr{cursor:pointer} #evlog tr:hover td{background:color-mix(in oklab, var(--ink) 4%, var(--surface))}
 #evlog td:nth-child(2){white-space:normal}
-.tiles{display:flex;gap:10px;flex-wrap:wrap}
-.tile{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:10px 16px;min-width:104px}
-.tile b{display:block;font-size:24px;font-weight:700}
-.tile span{color:var(--muted);font-size:12px}
+.tiles{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px}
+.tile{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:10px 16px;min-width:110px}
+.tile b{display:block;font-size:26px;font-weight:700;font-variant-numeric:tabular-nums;line-height:1.25}
+.tile span{color:var(--ink3);font-size:12px}
 .legend{display:flex;gap:14px;align-items:center;font-size:12px;color:var(--ink2);margin:6px 0}
 .dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:4px;vertical-align:-1px}
 .bars .brow{display:grid;grid-template-columns:34px 1fr 1fr;gap:8px;align-items:center;margin:4px 0}
@@ -69,6 +86,10 @@ svg text{fill:var(--muted);font-size:5px}
 a{color:var(--us)}
 .err{color:var(--opp);font-size:12px}
 .ok{color:var(--goal)}
+.badge{display:inline-block;border:1px solid var(--axis);border-radius:10px;padding:0 8px;font-size:11px;font-weight:600;color:var(--ink3)}
+.badge.basic{border-color:var(--us);color:var(--us)}
+.badge.premium{background:var(--goal);border-color:var(--goal);color:#fff}
+.icons{font-size:13px;letter-spacing:2px}
 </style>
 </head>
 <body>
@@ -124,17 +145,21 @@ a{color:var(--us)}
           <kbd>Space</kbd> play/pause · <kbd>←</kbd>/<kbd>→</kbd> ±5s (<kbd>Shift</kbd> ±1s) · <kbd>,</kbd>/<kbd>.</kbd> speed ·
           <kbd>C</kbd> calibrate · <kbd>K</kbd> clock run/stop ·
           <kbd>S</kbd>/<kbd>A</kbd> shot us/opp · <kbd>G</kbd>/<kbd>H</kbd> goal us/opp ·
-          <kbd>P</kbd>/<kbd>O</kbd> penalty us/opp · <kbd>L</kbd> line change · <kbd>U</kbd> state override
+          <kbd>P</kbd>/<kbd>O</kbd> penalty us/opp · <kbd>L</kbd> line change · <kbd>U</kbd> state override ·
+          <kbd>F</kbd> faceoff · <kbd>E</kbd>/<kbd>W</kbd> zone entry/exit · <kbd>N</kbd> quick marker
         </div>
       </div>
     </div>
     <div>
       <div class="card">
-        <div class="clock"><span id="ckPeriod">P1</span> <span id="ckTime">--:--</span> <small id="ckState">not calibrated — press C</small></div>
-        <div class="hint">On ice: <span id="onIceNow">—</span></div>
+        <div class="clock"><span id="ckPeriod">P1</span> <span id="ckTime">--:--</span> <small id="ckState">not calibrated: press C</small></div>
+        <div class="hint">On ice: <span id="onIceNow">—</span> · <button class="ghost" id="btnLines">Edit lines</button></div>
       </div>
       <div class="card">
-        <h3>Event log</h3>
+        <div class="row"><h3 style="margin:0">Event log</h3>
+          <span class="hint" id="evCount"></span>
+          <select id="evFilter" style="margin-left:auto"><option value="">All events</option><option value="todo">Needs info</option></select>
+        </div>
         <div id="evlog" class="tblwrap"><table id="evTbl"></table></div>
       </div>
     </div>
@@ -166,12 +191,28 @@ a{color:var(--us)}
   <div class="card"><h3>Players <button class="ghost" data-csv="playersTbl">⬇ CSV</button></h3>
     <div class="tblwrap"><table id="playersTbl"></table></div>
   </div>
+  <div class="card"><h3>Together on ice</h3>
+    <h3>Line units <button class="ghost" data-csv="unitsTbl">⬇ CSV</button></h3>
+    <div class="tblwrap"><table id="unitsTbl"></table></div>
+    <div class="row"><h3 style="margin:0">Player pairs <button class="ghost" data-csv="pairsTbl">⬇ CSV</button></h3>
+      <select id="pairPlayer" style="margin-left:auto"><option value="0">Top 30 pairs</option></select></div>
+    <div class="tblwrap"><table id="pairsTbl"></table></div>
+    <div class="hint">TOI both/all on ice together; GF/GA and per-60 rates = goals for/against while together. Pick a player to see all their teammates sorted by shared ice time.</div>
+  </div>
+  <div class="card" id="shiftCard"><h3>Shift chart <span class="hint">select exactly one game in the filters above</span></h3>
+    <div class="tblwrap"><svg id="shiftChart" style="width:100%"></svg></div>
+  </div>
+  <div class="card" id="extrasCard"><h3>Faceoffs &amp; zone play <button class="ghost" data-csv="extrasTbl">⬇ CSV</button></h3>
+    <div class="tblwrap"><table id="extrasTbl"></table></div>
+  </div>
   <div class="card"><h3>Shot map</h3>
     <div class="row">
       <select id="hTeam"><option value="us">Falcons shots</option><option value="opp">Opponent shots</option></select>
       <select id="hPlayer"><option value="0">All players</option></select>
       <select id="hResult"><option value="">All results</option><option value="goal">Goals</option><option value="on_goal">On goal</option><option value="missed">Missed</option><option value="blocked">Blocked</option></select>
       <select id="hMode"><option value="dots">Dots</option><option value="density">Density</option></select>
+      <select id="hDist"><option value="">Any distance</option><option value="0-5">0–5 m from net</option>
+        <option value="5-10">5–10 m</option><option value="10-18">10–18 m</option><option value="18-99">18 m +</option></select>
     </div>
     <div class="legend" id="hLegend">
       <span><span class="dot" style="background:var(--goal)"></span>Goal</span>
@@ -182,6 +223,9 @@ a{color:var(--us)}
     </div>
     <svg id="heatmap" class="rink" viewBox="0 0 200 85" style="cursor:default"></svg>
     <h3>Goal-mouth placement <span class="hint">(shots with recorded net location, shooter's view)</span></h3>
+    <div class="legend"><span><span class="dot" style="background:var(--goal)"></span>Goal</span>
+      <span><span class="dot" style="background:var(--us)"></span>Saved</span>
+      <span class="hint">goalie silhouette for orientation · hover for xGOT</span></div>
     <svg id="netmap" viewBox="-6 -6 84 60" style="max-width:340px;display:block;background:var(--surface);border:1px solid var(--grid);border-radius:8px"></svg>
   </div>
 </section>
@@ -213,10 +257,12 @@ a{color:var(--us)}
   </div>
   <div class="card"><h2>Teams (opponents)</h2><div id="teamsList"></div>
     <div class="row"><input id="tName" placeholder="Team name"><button class="pri" id="tAdd">Add team</button></div>
-    <div class="hint">Seeded from <code>seed/teams_template.csv</code> — edit freely; the league site (univerzitnihokej.cz) is the source of truth for names.</div>
+    <div class="hint">Seeded from <code>seed/teams_template.csv</code>; edit freely, the league site (univerzitnihokej.cz) is the source of truth for names.</div>
   </div>
   <div class="card"><h2>Keyboard shortcuts</h2>
-    <div class="hint">Defaults documented in the <a href="/manual" target="_blank">manual</a>. To change them, edit the <code>KEYS</code> map at the top of the script in <code>static/index.html</code>.</div>
+    <div class="tblwrap"><table id="keysTbl"></table></div>
+    <div class="row"><button id="keysReset">Reset to defaults</button>
+      <span class="hint" id="keysMsg">Click Rebind, then press the new key. Saved in this browser.</span></div>
   </div>
 </section>
 </main>
@@ -235,7 +281,7 @@ a{color:var(--us)}
 <dialog id="dlgShot">
   <h3 id="shTitle">Shot</h3>
   <svg id="shotRink" class="rink" viewBox="0 0 200 85"></svg>
-  <div class="hint">Click the shot location — shooter always attacks the <b>right</b> net. <span id="shLocMsg" class="err">location required</span></div>
+  <div class="hint">Click the shot location. The shooter always attacks the <b>right</b> net. <span id="shLocMsg" class="err">location required</span></div>
   <div class="row" id="rowShooter">Shooter #<input id="shShooter" class="num" inputmode="numeric"><span id="shShooterName" class="hint"></span></div>
   <div class="row">Result <select id="shResult">
     <option value="on_goal">on goal (saved)</option><option value="missed">missed</option>
@@ -264,11 +310,50 @@ a{color:var(--us)}
   <div class="row"><button class="pri save" id="penSave">Save (Enter)</button></div>
 </dialog>
 
-<dialog id="dlgLineup">
+<dialog id="dlgLineup" style="min-width:min(560px,92vw)">
   <h3>Players on ice</h3>
+  <div id="luGrid"></div>
   <div class="chips" id="luChips"></div>
-  <input id="luInput" inputmode="numeric" placeholder="jersey # + Enter toggles" autocomplete="off">
-  <div class="hint"><kbd>Enter</kbd> on empty field = save · type <kbd>c</kbd> + Enter = clear all · Esc = cancel</div>
+  <input id="luInput" inputmode="numeric" placeholder="jersey # / f1–f4 / d1–d3 / g / c  + Enter" autocomplete="off">
+  <div class="hint">Click players to toggle, line buttons swap the whole line (extras stay). Or type + <kbd>Enter</kbd>:
+    jersey number · <kbd>f2</kbd>/<kbd>d1</kbd> line swap · <kbd>g</kbd> pull/return goalie · <kbd>c</kbd> clear skaters.
+    <kbd>Enter</kbd> on empty = save · Esc = cancel</div>
+</dialog>
+
+<dialog id="dlgLines">
+  <h3>Lines for this game</h3>
+  <div id="linesList" style="max-height:55vh;overflow-y:auto"></div>
+  <div class="hint">Unassigned players show as <b>extras</b> in the line-change panel (line buttons never remove them).
+    Edit any time, mid-game shuffles included. <b>G</b> marks the goalie in net.</div>
+  <div class="row"><button class="pri save" id="linesSave">Save (Enter)</button></div>
+</dialog>
+
+<dialog id="dlgFo">
+  <h3>Faceoff</h3>
+  <div class="row">Won by <select id="foWon"><option value="us">Falcons</option><option value="opp">opponent</option></select></div>
+  <div class="row">Taken by our #<input id="foPlayer" class="num" inputmode="numeric"><span id="foPlayerName" class="hint"></span><span class="hint">(optional)</span></div>
+  <div class="row"><button class="pri save" id="foSave">Save (Enter)</button></div>
+</dialog>
+
+<dialog id="dlgZone">
+  <h3 id="znTitle">Zone entry</h3>
+  <div class="row">Player #<input id="znPlayer" class="num" inputmode="numeric"><span id="znPlayerName" class="hint"></span><span class="hint">(optional)</span></div>
+  <div class="row"><select id="znCtrl"><option value="controlled">controlled (carried / passed)</option><option value="uncontrolled">uncontrolled (dump / chip)</option></select></div>
+  <div class="row"><button class="pri save" id="znSave">Save (Enter)</button></div>
+</dialog>
+
+<dialog id="dlgMark">
+  <h3>Marker</h3>
+  <div class="row">Note <input id="markNote" placeholder="e.g. faceoff, rewatch this" style="flex:1"></div>
+  <div class="hint">Convert to a real event (opens the panel prefilled at this game time):</div>
+  <div class="row">
+    <button data-conv="shot-us">Shot us</button><button data-conv="shot-opp">Shot opp</button>
+    <button data-conv="goal-us">Goal us</button><button data-conv="goal-opp">Goal opp</button>
+    <button data-conv="pen-us">Penalty us</button><button data-conv="pen-opp">Penalty opp</button>
+    <button data-conv="lineup-us">Lineup</button><button data-conv="fo-us">Faceoff</button>
+    <button data-conv="zentry-us">Entry</button><button data-conv="zexit-us">Exit</button>
+  </div>
+  <div class="row"><button class="pri save" id="markSave">Save note (Enter)</button></div>
 </dialog>
 
 <dialog id="dlgOvr">
@@ -283,10 +368,19 @@ a{color:var(--us)}
 
 <script>
 "use strict";
-/* ---- keyboard map: edit here to rebind (documented in /manual) ---- */
-const KEYS = {playPause:" ", calibrate:"c", clock:"k", shotUs:"s", shotOpp:"a",
-  goalUs:"g", goalOpp:"h", penUs:"p", penOpp:"o", lineup:"l", override:"u",
-  back:"ArrowLeft", fwd:"ArrowRight", slower:",", faster:"."};
+/* ---- keyboard map: defaults; rebindable in the Setup tab (localStorage) ---- */
+const KEY_DEFS = {
+  playPause:[" ","Play / pause video"], back:["ArrowLeft","Seek back 5 s (Shift: 1 s)"],
+  fwd:["ArrowRight","Seek forward 5 s (Shift: 1 s)"], slower:[",","Playback slower"],
+  faster:[".","Playback faster"], calibrate:["c","Calibrate clock"], clock:["k","Clock run / stop"],
+  shotUs:["s","Shot: Falcons"], shotOpp:["a","Shot: opponent"],
+  goalUs:["g","Goal: Falcons"], goalOpp:["h","Goal: opponent"],
+  penUs:["p","Penalty: Falcons"], penOpp:["o","Penalty: opponent"],
+  lineup:["l","Line change"], override:["u","State override"],
+  marker:["n","Quick marker (fill details later)"],
+  faceoff:["f","Faceoff"], entry:["e","Zone entry (offensive)"], exit:["w","Zone exit (breakout)"]};
+const KEYS = Object.fromEntries(Object.entries(KEY_DEFS).map(([k,[d]])=>
+  [k, (JSON.parse(localStorage.getItem("falcKeys")||"{}"))[k]||d]));
 
 const $ = s=>document.querySelector(s), $$ = s=>[...document.querySelectorAll(s)];
 const api = async (p, method="GET", body)=>{
@@ -299,7 +393,7 @@ const mmss = s=>`${Math.floor(s/60)}:${String(Math.floor(s%60)).padStart(2,"0")}
 const parseClock = t=>{const m=/^(\d{1,2}):([0-5]?\d)$/.exec(t.trim());return m?60*+m[1]+ +m[2]:null;};
 const esc = s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 
-let SEASONS=[], TEAMS=[], PLAYERS=[], GAMES=[];
+let SEASONS=[], TEAMS=[], PLAYERS=[], GAMES=[], FLAGS={};
 let G=null, EVS=[], cal=null, onIce=new Set(), editingId=null, editingGame=null;
 const PBYID = ()=>Object.fromEntries(PLAYERS.map(p=>[p.id,p]));
 const pname = id=>{const p=PBYID()[id];return p?`#${p.number} ${p.name}`:(id?`?${id}`:"");};
@@ -313,13 +407,14 @@ $$("nav button").forEach(b=>b.onclick=()=>{
   $$("nav button").forEach(x=>x.classList.toggle("on",x===b));
   $$("section.tab").forEach(s=>s.classList.toggle("on",s.id==="tab-"+b.dataset.tab));
   if(b.dataset.tab==="dash") loadDash();
+  if(b.dataset.tab==="games") api("/game_flags").then(f=>{FLAGS=f;renderGames();});
 });
 const showTab = name=>$$("nav button").find(b=>b.dataset.tab===name).click();
 
 /* ================= reference data ================= */
 async function loadRefs(){
-  [SEASONS,TEAMS,PLAYERS,GAMES] = await Promise.all(
-    ["/seasons","/teams","/players","/games"].map(p=>api(p)));
+  [SEASONS,TEAMS,PLAYERS,GAMES,FLAGS] = await Promise.all(
+    ["/seasons","/teams","/players","/games","/game_flags"].map(p=>api(p)));
   renderSetup(); renderRoster(); renderGameForm(); renderGames(); fillDashFilters();
 }
 
@@ -344,7 +439,8 @@ function renderRoster(){
       <td><input size="2" value="${esc(p.position)}" data-pf="position" data-pid="${p.id}"></td>
       <td><input value="${esc(p.photo)}" data-pf="photo" data-pid="${p.id}" placeholder="URL"></td>
       <td><input type="checkbox" ${p.active?"checked":""} data-pf="active" data-pid="${p.id}"></td>
-      <td><button class="ghost" data-del-p="${p.id}">✕</button></td></tr>`).join("");
+      <td><button class="ghost" data-del-p="${p.id}">✕</button></td></tr>`).join("")
+    ||`<tr><td colspan="6" class="hint">Roster is empty. Add players below or import a CSV.</td></tr>`;
   $$("[data-pf]").forEach(el=>el.onchange=async()=>{
     const v = el.type==="checkbox"?(el.checked?1:0):el.value;
     await api("/players/"+el.dataset.pid,"PUT",{[el.dataset.pf]:v});
@@ -391,16 +487,30 @@ $("#gSave").onclick = async()=>{
   loadRefs();
 };
 $("#gCancel").onclick = ()=>{editingGame=null;$("#gformTitle").textContent="New game";$("#gCancel").hidden=true;renderGameForm();};
+function gradeOf(f){
+  if(!f||!f.shot) return ['<span class="badge">—</span>',"nothing logged yet"];
+  if(!f.lineup) return ['<span class="badge">partial</span>',"shots logged; needs line changes (ice time) for Basic"];
+  if(f.todo) return ['<span class="badge basic">Basic</span>',`shots + ice time logged; ${f.todo} event(s) still need details`];
+  return ['<span class="badge premium">Premium</span>',"shots with locations + ice time, every event complete"];
+}
+function gameIcons(f){
+  if(!f) return "";
+  const ic=[["faceoff","◉","faceoffs tracked"],["entry","⇥","zone entries tracked"],["exit","⇤","zone exits tracked"]]
+    .filter(([k])=>f[k]).map(([,s,t])=>`<span title="${t}">${s}</span>`).join("");
+  return ic?`<span class="icons">${ic}</span>`:"";
+}
 function renderGames(){
   const tmap = Object.fromEntries(TEAMS.map(t=>[t.id,t.name]));
   const smap = Object.fromEntries(SEASONS.map(s=>[s.id,s.name]));
-  $("#gamesTbl").innerHTML = "<tr><th>Date</th><th>Season</th><th>Opponent</th><th>H/A</th><th>Score</th><th></th></tr>"+
-    GAMES.slice().reverse().map(g=>`<tr>
+  $("#gamesTbl").innerHTML = "<tr><th>Date</th><th>Season</th><th>Opponent</th><th>H/A</th><th>Score</th><th>Logged</th><th></th></tr>"+
+    GAMES.slice().reverse().map(g=>{const f=FLAGS[g.id],[badge,tip]=gradeOf(f);return `<tr>
       <td>${esc(g.date)}</td><td>${esc(smap[g.season_id]??"")}</td><td>${esc(tmap[g.opponent_id]??"?")}</td>
       <td>${g.home?"H":"A"}</td><td>${g.score_us}:${g.score_opp}</td>
+      <td title="${esc(tip)}">${badge} ${gameIcons(f)}</td>
       <td><button class="pri" data-open="${g.id}">Open / log</button>
           <button data-editg="${g.id}">Edit</button>
-          <button class="ghost" data-delg="${g.id}">✕</button></td></tr>`).join("");
+          <button class="ghost" data-delg="${g.id}">✕</button></td></tr>`;}).join("")
+    ||`<tr><td colspan="7" class="hint">No games yet. Create the first one above.</td></tr>`;
   $$("[data-open]").forEach(b=>b.onclick=()=>openGame(+b.dataset.open));
   $$("[data-delg]").forEach(b=>b.onclick=async()=>{
     if(confirm("Delete game AND all its events?")){
@@ -457,7 +567,7 @@ function gameClock(){
   return Math.max(0, cal.clock - (video.currentTime - cal.videoT));
 }
 function setCkState(){
-  $("#ckState").textContent = !cal ? "not calibrated — press C" : (cal.running?"running":"STOPPED (K to run)");
+  $("#ckState").textContent = !cal ? "not calibrated: press C" : (cal.running?"running":"STOPPED (K to run)");
   $("#ckState").className = cal&&!cal.running ? "stopped" : "";
 }
 setInterval(()=>{
@@ -489,11 +599,13 @@ async function openGame(id){
   cal = JSON.parse(G.calibration||"null");
   const lastLu = EVS.filter(e=>e.type==="lineup").sort((a,b)=>a.id-b.id).pop();
   onIce = new Set(lastLu?JSON.parse(lastLu.on_ice||"[]"):[]);
+  const gid0=goalieOf();
+  goaliePulled = !!(gid0 && lastLu && !onIce.has(gid0));
   vURLs=[];vNames=[];vPeriods=[];curIdx=G.last_video_idx||0;
   const tmap=Object.fromEntries(TEAMS.map(t=>[t.id,t.name]));
   $("#lgTitle").textContent = `${G.home?"":"@ "}${tmap[G.opponent_id]??"?"} ${G.date??""}`;
   const saved=JSON.parse(G.video_files||"[]");
-  $("#vprev").innerHTML = saved.length?`Re-select video file(s) for this game: <b>${saved.map(s=>esc(s.name)).join(", ")}</b> — resumes at ${mmss(G.last_video_pos||0)}`:"Pick the game video file(s) (they stay on disk, nothing is uploaded).";
+  $("#vprev").innerHTML = saved.length?`Re-select video file(s) for this game: <b>${saved.map(s=>esc(s.name)).join(", ")}</b>; resumes at ${mmss(G.last_video_pos||0)}`:"Pick the game video file(s) (they stay on disk, nothing is uploaded).";
   $("#vlist").innerHTML="";video.removeAttribute("src");video.load();
   $("#noGame").hidden=true;$("#logUI").hidden=false;
   setCkState(); renderLog(); renderOnIce(); showTab("log");
@@ -508,7 +620,7 @@ function evText(e){
   const t={shot:"Shot",penalty:"Penalty",lineup:"Line",override:"Override"}[e.type];
   if(e.type==="shot"){
     const res=e.result==="goal"?"🥅 GOAL":e.result.replace("_"," ");
-    let s=`${e.team==="us"?(e.player_id?pname(e.player_id):"Falcons"):"Opponent"} — ${res}`;
+    let s=`${e.team==="us"?(e.player_id?pname(e.player_id):"Falcons"):"Opponent"} · ${res}`;
     if(e.result==="goal"&&(e.assist1_id||e.assist2_id)) s+=` (A: ${[e.assist1_id,e.assist2_id].filter(Boolean).map(pname).join(", ")})`;
     if(e.blocker_id) s+=` · blk ${pname(e.blocker_id)}`;
     if(e.screen_id) s+=` · screen ${pname(e.screen_id)}`;
@@ -516,13 +628,22 @@ function evText(e){
   }
   if(e.type==="penalty") return `${e.team==="us"?pname(e.player_id)||"Falcons":"Opponent"} ${e.pim}′${e.zone?" · "+e.zone:""}`;
   if(e.type==="lineup"){const ids=JSON.parse(e.on_ice||"[]");return ids.map(id=>{const p=PBYID()[id];return p?p.number:id;}).join(" ")||"empty";}
+  if(e.type==="marker") return `◇ ${e.note||"marker"}`;
+  if(e.type==="faceoff") return `FO ${e.team==="us"?"won":"lost"}${e.player_id?" · "+pname(e.player_id):""}`;
+  if(e.type==="entry"||e.type==="exit")
+    return `${e.type==="entry"?"Entry":"Exit"} ${e.detail==="controlled"?"ctrl":"dump"}${e.player_id?" · "+pname(e.player_id):""}`;
   return e.override;
 }
+const needsInfo = e => e.type==="marker" ||
+  (e.type==="shot" && (e.x==null || (e.team==="us" && !e.player_id)));
 function renderLog(){
-  const rows = EVS.slice().sort((a,b)=>elapsedOf(b)-elapsedOf(a)||b.id-a.id);
+  let rows = EVS.slice().sort((a,b)=>elapsedOf(b)-elapsedOf(a)||b.id-a.id);
+  const todo = EVS.filter(needsInfo).length;
+  $("#evCount").textContent = `${EVS.length-todo}/${EVS.length} complete`;
+  if($("#evFilter").value==="todo") rows = rows.filter(needsInfo);
   $("#evTbl").innerHTML = "<tr><th>Time</th><th>Event</th><th></th></tr>"+rows.map(e=>
     `<tr data-ev="${e.id}"><td>${e.period===4?"OT":"P"+e.period} ${mmss(e.clock)}</td>
-     <td>${e.type==="shot"&&e.result==="goal"?"<b>":""}${esc(evText(e))}${e.type==="shot"&&e.result==="goal"?"</b>":""}</td>
+     <td>${needsInfo(e)?'<span class="err" title="needs details">⚠</span> ':""}${e.type==="shot"&&e.result==="goal"?"<b>":""}${esc(evText(e))}${e.type==="shot"&&e.result==="goal"?"</b>":""}</td>
      <td><button class="ghost" data-edit="${e.id}">✎</button><button class="ghost" data-del="${e.id}">✕</button></td></tr>`).join("");
   $$("#evTbl tr[data-ev]").forEach(tr=>tr.onclick=ev=>{
     if(ev.target.closest("button"))return;
@@ -563,13 +684,22 @@ function rinkSVG(){
   <path d="M 189 36.5 a 6 6 0 0 0 0 12" fill="none" stroke="var(--us)" opacity=".6"/>
   <path d="M 11 36.5 a 6 6 0 0 1 0 12" fill="none" stroke="var(--us)" opacity=".6"/>
   <rect x="189" y="39.5" width="3.4" height="6" fill="none" stroke="${C}"/>
-  <rect x="7.6" y="39.5" width="3.4" height="6" fill="none" stroke="${C}"/>`;
+  <rect x="7.6" y="39.5" width="3.4" height="6" fill="none" stroke="${C}"/>
+  <polygon points="189,39.5 169,20.5 154,20.5 154,64.5 169,64.5 189,45.5" fill="var(--us)" opacity=".05"/>
+  <polygon points="189,39.5 169,20.5 154,20.5 154,64.5 169,64.5 189,45.5" fill="none" stroke="${C}" stroke-width=".4" stroke-dasharray="2 1.5" opacity=".55"/>`;
 }
 function netSVG(){
   return `<rect x="0" y="0" width="72" height="48" fill="none" stroke="var(--opp)" stroke-width="2.5"/>
   <line x1="0" y1="48" x2="72" y2="48" stroke="var(--axis)" stroke-width="3"/>
   <line x1="24" y1="0" x2="24" y2="48" stroke="var(--grid)"/><line x1="48" y1="0" x2="48" y2="48" stroke="var(--grid)"/>
-  <line x1="0" y1="16" x2="72" y2="16" stroke="var(--grid)"/><line x1="0" y1="32" x2="72" y2="32" stroke="var(--grid)"/>`;
+  <line x1="0" y1="16" x2="72" y2="16" stroke="var(--grid)"/><line x1="0" y1="32" x2="72" y2="32" stroke="var(--grid)"/>
+  <g fill="var(--ink)" opacity=".13">
+    <rect x="19" y="38.5" width="34" height="9" rx="4"/>
+    <rect x="26.5" y="13" width="19" height="27" rx="6"/>
+    <circle cx="36" cy="9" r="5.2"/>
+    <circle cx="21" cy="21" r="5"/>
+    <rect x="46" y="17" width="7.5" height="9.5" rx="2"/>
+  </g>`;
 }
 function svgPoint(svg,ev){
   const pt=new DOMPoint(ev.clientX,ev.clientY).matrixTransform(svg.getScreenCTM().inverse());
@@ -654,11 +784,11 @@ function shotRows(){
 }
 $("#shResult").onchange=shotRows;
 function openShot(team,goal,ev){
-  shot = ev ? {team:ev.team,x:ev.x,y:ev.y,net_x:ev.net_x,net_y:ev.net_y}
+  shot = ev ? {team,x:ev.x,y:ev.y,net_x:ev.net_x,net_y:ev.net_y}
             : {team,x:null,y:null,net_x:null,net_y:null};
   editingId = ev?ev.id:null;
   $("#shTitle").textContent=(ev?"Edit shot — ":"")+(shot.team==="us"?"Falcons":"Opponent")+(goal?" GOAL":" shot");
-  $("#shResult").value = ev?ev.result:(goal?"goal":"on_goal");
+  $("#shResult").value = (ev&&ev.result)?ev.result:(goal?"goal":"on_goal");
   $("#shShooter").value=ev?.player_id?PBYID()[ev.player_id]?.number??"":"";
   $("#shBlocker").value=ev?.blocker_id?PBYID()[ev.blocker_id]?.number??"":"";
   $("#shA1").value=ev?.assist1_id?PBYID()[ev.assist1_id]?.number??"":"";
@@ -704,7 +834,7 @@ function openPen(team,ev){
   $("#rowPenPlayer").hidden=$("#rowPenZone").hidden=(team!=="us");
   $("#penPlayer").value=ev?.player_id?PBYID()[ev.player_id]?.number??"":"";
   $("#penPlayerName").textContent="";
-  $("#penLen").value=ev?String(ev.pim):"2";
+  $("#penLen").value=ev?.pim?String(ev.pim):"2";
   $("#penZone").value=ev?.zone||"def";
   openDlg(dlgPen);
   (team==="us"?$("#penPlayer"):$("#penLen")).focus();
@@ -725,28 +855,99 @@ async function savePen(){
 }
 wireEnter(dlgPen,()=>save1(savePen)); $("#penSave").onclick=()=>save1(savePen);
 
+/* ================= lines editor (per game, editable mid-game) ================= */
+const LKEYS=["F1","F2","F3","F4","D1","D2","D3","G"];
+const dlgLines=$("#dlgLines");
+const gameLines=()=>JSON.parse(G?.lines||"{}");
+const goalieOf=()=>{const e=Object.entries(gameLines()).find(([,k])=>k==="G");return e?+e[0]:null;};
+$("#btnLines").onclick=()=>{
+  if(!G)return;
+  const lines=gameLines();
+  const roster=JSON.parse(G.roster||"[]").map(id=>PBYID()[id]).filter(Boolean)
+    .sort((a,b)=>(a.number??99)-(b.number??99));
+  $("#linesList").innerHTML=roster.map(p=>`<div class="row">
+    <span style="width:170px">${p.number??"?"} ${esc(p.name)} <small class="hint">${esc(p.position)}</small></span>
+    <select data-line-p="${p.id}">${["",...LKEYS].map(k=>
+      `<option value="${k}" ${(lines[p.id]||"")===k?"selected":""}>${k||"—"}</option>`).join("")}</select>
+  </div>`).join("");
+  openDlg(dlgLines);
+};
+async function saveLines(){
+  const lines={};
+  $$("[data-line-p]").forEach(s=>{if(s.value)lines[s.dataset.lineP]=s.value;});
+  G.lines=JSON.stringify(lines);
+  await api("/games/"+G.id,"PUT",{lines:G.lines});
+  afterSave(dlgLines);
+}
+wireEnter(dlgLines,()=>save1(saveLines)); $("#linesSave").onclick=()=>save1(saveLines);
+
 /* ================= lineup dialog ================= */
 const dlgLu=$("#dlgLineup");
+let goaliePulled=false;
 function renderChips(){
   $("#luChips").innerHTML=[...onIce].map(id=>{const p=PBYID()[id];
     return `<span class="chip">${p?p.number+" "+esc(p.name):id}</span>`;}).join("")||`<span class="hint">nobody on ice</span>`;
 }
+function swapLine(key){ // put line `key` on; benches same-group lines, extras untouched
+  const lines=gameLines(), grp=key[0];
+  for(const [pid,k] of Object.entries(lines)) if(k!=="G"&&k[0]===grp) onIce.delete(+pid);
+  for(const [pid,k] of Object.entries(lines)) if(k===key) onIce.add(+pid);
+}
+function togglePull(){
+  const gid=goalieOf(); if(!gid)return;
+  goaliePulled=!goaliePulled;
+  goaliePulled?onIce.delete(gid):onIce.add(gid);
+}
+function renderLu(){
+  const lines=gameLines(), gid=goalieOf();
+  const roster=JSON.parse(G.roster||"[]");
+  const groups={};
+  roster.forEach(id=>{const k=lines[id];if(k&&k!=="G")(groups[k]=groups[k]||[]).push(id);});
+  const extras=roster.filter(id=>!lines[id]);
+  const btn=id=>{const p=PBYID()[id];
+    return `<button class="lubtn ${onIce.has(id)?"on":""}" data-lu-p="${id}">${p?`${p.number} ${esc(p.name.split(" ").pop())}`:id}</button>`;};
+  let html="";
+  for(const k of LKEYS.slice(0,-1)) if(groups[k])
+    html+=`<div class="row"><button class="lubtn linebtn" data-lu-line="${k}">${k}</button>${groups[k].map(btn).join("")}</div>`;
+  if(extras.length)
+    html+=`<div class="row"><span class="hint" style="min-width:40px">extra</span>${extras.map(btn).join("")}</div>`;
+  if(gid){const p=PBYID()[gid];
+    html+=`<div class="row"><span class="hint" style="min-width:40px">G</span>
+      <span class="chip">${p?p.number+" "+esc(p.name):gid}</span>
+      <button class="lubtn ${goaliePulled?"":"on"}" id="luPull">${goaliePulled?"PULLED · click to return":"in net · click to pull"}</button></div>`;}
+  else html+=`<div class="row hint">no goalie set: assign one in “Edit lines” (G)</div>`;
+  $("#luGrid").innerHTML=html;
+  $$("[data-lu-p]").forEach(b=>b.onclick=()=>{const id=+b.dataset.luP;
+    onIce.has(id)?onIce.delete(id):onIce.add(id);renderLu();});
+  $$("[data-lu-line]").forEach(b=>b.onclick=()=>{swapLine(b.dataset.luLine);renderLu();});
+  const lp=$("#luPull"); if(lp)lp.onclick=()=>{togglePull();renderLu();};
+  renderChips();
+  $("#luInput").focus();
+}
 function openLineup(ev){
   editingId=ev?ev.id:null;
   if(ev) onIce=new Set(JSON.parse(ev.on_ice||"[]"));
-  renderChips(); openDlg(dlgLu); $("#luInput").value=""; $("#luInput").focus();
+  const gid=goalieOf();
+  if(gid){ if(ev) goaliePulled=!onIce.has(gid); else if(!goaliePulled) onIce.add(gid); }
+  openDlg(dlgLu); $("#luInput").value=""; renderLu();
 }
 dlgLu.addEventListener("keydown",async e=>{
   if(e.key!=="Enter")return;
   e.preventDefault();
-  const v=$("#luInput").value.trim();
-  if(v==="c"){onIce.clear();renderChips();$("#luInput").value="";return;}
+  const v=$("#luInput").value.trim().toLowerCase();
+  $("#luInput").value="";
+  if(v==="c"){const gid=goalieOf();onIce.clear();if(gid&&!goaliePulled)onIce.add(gid);renderLu();return;}
+  if(v==="g"){togglePull();renderLu();return;}
+  const lm=/^([fd])([1-4])$/.exec(v);
+  if(lm){swapLine(lm[0].toUpperCase());renderLu();return;}
   if(v!==""){
     const p=byNum(v);
-    if(p){onIce.has(p.id)?onIce.delete(p.id):onIce.add(p.id);renderChips();}
-    $("#luInput").value=""; return;
+    if(p){onIce.has(p.id)?onIce.delete(p.id):onIce.add(p.id);renderLu();}
+    return;
   }
   save1(async()=>{
+    const gid=goalieOf();
+    if(gid&&!goaliePulled)onIce.add(gid);
     const data={type:"lineup",team:"us",on_ice:JSON.stringify([...onIce])};
     if(editingId){
       const ev2=await api("/events/"+editingId,"PUT",data);
@@ -779,12 +980,94 @@ async function saveOvr(){
 }
 wireEnter(dlgOvr,()=>save1(saveOvr)); $("#ovrSave").onclick=()=>save1(saveOvr);
 
+/* ================= faceoff / zone entry / exit (quick extras) ================= */
+const dlgFo=$("#dlgFo"), dlgZone=$("#dlgZone");
+const getFoP=jersey("#foPlayer","#foPlayerName"), getZnP=jersey("#znPlayer","#znPlayerName");
+let znType="entry";
+function openFo(ev){
+  editingId=ev?ev.id:null;
+  $("#foWon").value=ev?.team||"us";
+  $("#foPlayer").value=ev?.player_id?PBYID()[ev.player_id]?.number??"":"";
+  $("#foPlayerName").textContent="";
+  openDlg(dlgFo); $("#foWon").focus();
+}
+async function saveFo(){
+  const p=getFoP();
+  if(!p.ok){$("#foPlayer").focus();return;}
+  const data={type:"faceoff",team:$("#foWon").value,player_id:p.id};
+  if(editingId){
+    const e=await api("/events/"+editingId,"PUT",data);
+    EVS[EVS.findIndex(x=>x.id===editingId)]=e; editingId=null; renderLog();
+  } else {
+    const s=snap(); if(!s)return;
+    await postEvent(Object.assign(data,s));
+  }
+  afterSave(dlgFo);
+}
+wireEnter(dlgFo,()=>save1(saveFo)); $("#foSave").onclick=()=>save1(saveFo);
+function openZone(kind,ev){
+  znType=kind; editingId=ev?ev.id:null;
+  $("#znTitle").textContent=kind==="entry"?"Zone entry (into the offensive zone)":"Zone exit (breakout from our zone)";
+  $("#znPlayer").value=ev?.player_id?PBYID()[ev.player_id]?.number??"":"";
+  $("#znPlayerName").textContent="";
+  $("#znCtrl").value=ev?.detail||"controlled";
+  openDlg(dlgZone); $("#znPlayer").focus();
+}
+async function saveZone(){
+  const p=getZnP();
+  if(!p.ok){$("#znPlayer").focus();return;}
+  const data={type:znType,team:"us",player_id:p.id,detail:$("#znCtrl").value};
+  if(editingId){
+    const e=await api("/events/"+editingId,"PUT",data);
+    EVS[EVS.findIndex(x=>x.id===editingId)]=e; editingId=null; renderLog();
+  } else {
+    const s=snap(); if(!s)return;
+    await postEvent(Object.assign(data,s));
+  }
+  afterSave(dlgZone);
+}
+wireEnter(dlgZone,()=>save1(saveZone)); $("#znSave").onclick=()=>save1(saveZone);
+
+/* ================= quick marker (fill in later) ================= */
+const dlgMark=$("#dlgMark");
+let markEv=null;
+async function quickMarker(){ // no dialog, no pause: just stamp the moment
+  const s=snap(); if(!s)return;
+  await postEvent(Object.assign({type:"marker",team:"us",note:""},s));
+}
+function openMark(ev){
+  markEv=ev; editingId=ev.id;
+  $("#markNote").value=ev.note||"";
+  openDlg(dlgMark); $("#markNote").focus();
+}
+async function saveMark(){
+  const e=await api("/events/"+markEv.id,"PUT",{note:$("#markNote").value});
+  EVS[EVS.findIndex(x=>x.id===markEv.id)]=e; renderLog();
+  afterSave(dlgMark);
+}
+wireEnter(dlgMark,()=>save1(saveMark)); $("#markSave").onclick=()=>save1(saveMark);
+$$("#dlgMark [data-conv]").forEach(b=>b.onclick=()=>{
+  const ev=markEv; dlgMark.close();
+  const [t,team]=b.dataset.conv.split("-");
+  if(t==="shot")openShot(team,false,ev);
+  else if(t==="goal")openShot(team,true,ev);
+  else if(t==="pen")openPen(team,ev);
+  else if(t==="fo")openFo(ev);
+  else if(t==="zentry")openZone("entry",ev);
+  else if(t==="zexit")openZone("exit",ev);
+  else openLineup(ev);
+});
+$("#evFilter").onchange=renderLog;
+
 /* edit dispatch */
 function editEvent(id){
   const e=EVS.find(x=>x.id===id);
   if(e.type==="shot")openShot(e.team,e.result==="goal",e);
   else if(e.type==="penalty")openPen(e.team,e);
   else if(e.type==="lineup")openLineup(e);
+  else if(e.type==="marker")openMark(e);
+  else if(e.type==="faceoff")openFo(e);
+  else if(e.type==="entry"||e.type==="exit")openZone(e.type,e);
   else openOvr(e);
 }
 
@@ -805,10 +1088,47 @@ document.addEventListener("keydown",e=>{
     [KEYS.goalUs]:()=>openShot("us",true), [KEYS.goalOpp]:()=>openShot("opp",true),
     [KEYS.penUs]:()=>openPen("us"), [KEYS.penOpp]:()=>openPen("opp"),
     [KEYS.lineup]:()=>openLineup(), [KEYS.override]:()=>openOvr(),
+    [KEYS.marker]:quickMarker,
+    [KEYS.faceoff]:()=>openFo(), [KEYS.entry]:()=>openZone("entry"), [KEYS.exit]:()=>openZone("exit"),
   };
   if(acts[k]){e.preventDefault();acts[k]();}
 });
-$$("dialog").forEach(d=>d.addEventListener("close",()=>{editingId=null;}));
+$$("dialog").forEach(d=>d.addEventListener("close",()=>{
+  // close events fire async: keep editingId when another dialog already took over (marker conversion)
+  if(!document.querySelector("dialog[open]")) editingId=null;
+}));
+
+/* ================= shortcut rebinding (Setup tab) ================= */
+const prettyKey=k=>({" ":"Space",ArrowLeft:"←",ArrowRight:"→",ArrowUp:"↑",ArrowDown:"↓"}[k]||k.toUpperCase());
+function renderKeys(){
+  $("#keysTbl").innerHTML="<tr><th>Action</th><th>Key</th><th></th></tr>"+
+    Object.entries(KEY_DEFS).map(([id,[,label]])=>`<tr><td>${label}</td>
+      <td><kbd>${prettyKey(KEYS[id])}</kbd></td>
+      <td><button class="ghost" data-rebind="${id}">Rebind</button></td></tr>`).join("");
+  $$("[data-rebind]").forEach(b=>b.onclick=()=>{
+    const id=b.dataset.rebind;
+    b.textContent="press a key…";
+    const grab=e=>{
+      e.preventDefault(); e.stopPropagation();
+      document.removeEventListener("keydown",grab,true);
+      if(e.key==="Escape"){renderKeys();return;}
+      const k=e.key.length===1?e.key.toLowerCase():e.key;
+      const clash=Object.entries(KEYS).find(([a,v])=>v===k&&a!==id);
+      if(clash){$("#keysMsg").textContent=`"${prettyKey(k)}" is already ${KEY_DEFS[clash[0]][1]}`;renderKeys();return;}
+      KEYS[id]=k;
+      const ov=JSON.parse(localStorage.getItem("falcKeys")||"{}"); ov[id]=k;
+      localStorage.setItem("falcKeys",JSON.stringify(ov));
+      $("#keysMsg").textContent="Saved."; renderKeys();
+    };
+    document.addEventListener("keydown",grab,true);
+  });
+}
+$("#keysReset").onclick=()=>{
+  localStorage.removeItem("falcKeys");
+  Object.entries(KEY_DEFS).forEach(([k,[d]])=>KEYS[k]=d);
+  $("#keysMsg").textContent="Defaults restored."; renderKeys();
+};
+renderKeys();
 
 /* ================= dashboard ================= */
 function fillDashFilters(){
@@ -817,6 +1137,7 @@ function fillDashFilters(){
   const tmap=Object.fromEntries(TEAMS.map(t=>[t.id,t.name]));
   $("#fGames").innerHTML=GAMES.map(g=>`<option value="${g.id}">${esc(g.date)} ${g.home?"vs":"@"} ${esc(tmap[g.opponent_id]??"?")}</option>`).join("");
   $("#hPlayer").innerHTML=`<option value="0">All players</option>`+PLAYERS.map(p=>`<option value="${p.id}">${p.number??"?"} ${esc(p.name)}</option>`).join("");
+  $("#pairPlayer").innerHTML=`<option value="0">Top 30 pairs</option>`+PLAYERS.map(p=>`<option value="${p.id}">${p.number??"?"} ${esc(p.name)}</option>`).join("");
 }
 let DASH=null;
 async function loadDash(){
@@ -842,11 +1163,15 @@ function renderDash(){
     <tr><td>Goals</td><td>${t.gf}</td><td>${t.ga}</td></tr>
     <tr><td>Shots on goal</td><td>${t.sog_f}</td><td>${t.sog_a}</td></tr>
     <tr><td>All attempts</td><td>${t.att_f}</td><td>${t.att_a}</td></tr>
-    <tr><td>xG</td><td>${t.xg_f}</td><td>${t.xg_a}</td></tr>
+    <tr><td>xG (all attempts)</td><td>${t.xg_f}</td><td>${t.xg_a}</td></tr>
+    <tr><td>xGOT (shots on goal with placement)</td><td>${t.xgot_f}</td><td>${t.xgot_a}</td></tr>
+    <tr><td>Slot SOG (home plate)</td><td>${t.slot_f}</td><td>${t.slot_a}</td></tr>
     <tr><td>Shooting %</td><td>${t.sh_pct}%</td><td></td></tr>
     <tr><td>PP</td><td>${t.ppg} G / ${t.pp_opps} opps (${t.pp_pct}%)</td><td>SOG per PP: ${t.shots_per_pp}</td></tr>
     <tr><td>PK</td><td>${t.sh_times-t.ppga} killed / ${t.sh_times} (${t.pk_pct}%)</td><td>GA on PK: ${t.ppga}</td></tr>
-    <tr><td>Penalties (zone O/N/D)</td><td>${t.pens_zone.off} / ${t.pens_zone.neu} / ${t.pens_zone.def}</td><td>PIM ${t.pim}</td></tr>`;
+    <tr><td>Penalties (zone O/N/D)</td><td>${t.pens_zone.off} / ${t.pens_zone.neu} / ${t.pens_zone.def}</td><td>PIM ${t.pim}</td></tr>
+    <tr><td>Faceoffs</td><td>${t.fo_w} W / ${t.fo_l} L (${t.fo_pct}%)</td><td></td></tr>
+    <tr><td>Zone entries / exits (controlled)</td><td>${t.entries} (${t.entries_ctrl})</td><td>${t.exits} (${t.exits_ctrl})</td></tr>`;
   const periods=Object.keys(t.by_period).sort();
   const mx=Math.max(1,...periods.flatMap(p=>[t.by_period[p].sf,t.by_period[p].sa]));
   $("#periodBars").innerHTML=periods.map(p=>{const d=t.by_period[p];return `
@@ -854,21 +1179,69 @@ function renderDash(){
     <span><span class="bar" title="SOG for P${p}: ${d.sf}" style="width:${d.sf/mx*90}%;background:var(--us)"></span><span class="bnum">${d.sf}</span></span>
     <span><span class="bar" title="SOG against P${p}: ${d.sa}" style="width:${d.sa/mx*90}%;background:var(--opp)"></span><span class="bnum">${d.sa}</span></span></div>`;}).join("")
     ||`<div class="hint">no shots in the current filter</div>`;
-  $("#playersTbl").innerHTML=`<tr><th>#</th><th>Player</th><th>GP</th><th>G</th><th>A</th><th>P</th><th>SOG</th><th>Att</th><th>Sh%</th><th>xG</th><th>Blk</th><th>Pen</th><th>PIM</th><th>Scr</th><th>TOI</th><th>5v5</th><th>PP</th><th>PK</th><th>P/60</th><th>S/60 5v5</th><th>SF on</th><th>SA on</th><th>GF on</th><th>GA on</th></tr>`+
+  $("#playersTbl").innerHTML=`<tr><th>#</th><th>Player</th><th>GP</th><th>G</th><th>A</th><th>P</th><th>SOG</th><th>Att</th><th>Sh%</th><th>xG</th><th>xGOT</th><th>Blk</th><th>Pen</th><th>PIM</th><th>Scr</th><th>TOI</th><th>5v5</th><th>PP</th><th>PK</th><th>P/60</th><th>S/60 5v5</th><th>SF on</th><th>SA on</th><th>GF on</th><th>GA on</th></tr>`+
     DASH.players.map(p=>`<tr><td>${p.number??""}</td><td>${esc(p.name)}</td><td>${p.gp}</td><td>${p.g}</td><td>${p.a}</td><td><b>${p.p}</b></td>
-      <td>${p.sog}</td><td>${p.att}</td><td>${p.sh_pct}</td><td>${p.xg}</td><td>${p.blk}</td><td>${p.pen}</td><td>${p.pim}</td><td>${p.screens}</td>
+      <td>${p.sog}</td><td>${p.att}</td><td>${p.sh_pct}</td><td>${p.xg}</td><td>${p.xgot}</td><td>${p.blk}</td><td>${p.pen}</td><td>${p.pim}</td><td>${p.screens}</td>
       <td>${TOI(p.toi)}</td><td>${TOI(p.toi_5v5)}</td><td>${TOI(p.toi_pp)}</td><td>${TOI(p.toi_pk)}</td>
-      <td>${p.p60}</td><td>${p.s60_5v5}</td><td>${p.sf_on}</td><td>${p.sa_on}</td><td>${p.gf_on}</td><td>${p.ga_on}</td></tr>`).join("");
+      <td>${p.p60}</td><td>${p.s60_5v5}</td><td>${p.sf_on}</td><td>${p.sa_on}</td><td>${p.gf_on}</td><td>${p.ga_on}</td></tr>`).join("")
+    ||`<tr><td colspan="25" class="hint">No data in the current filter.</td></tr>`;
+  const tg=DASH.together||{units:[],pairs:[]};
+  const p60=(n,toi)=>toi?(n*3600/toi).toFixed(2):"0";
+  $("#unitsTbl").innerHTML="<tr><th>Line</th><th>Players</th><th>TOI together</th><th>GF</th><th>GA</th><th>GF/60</th><th>GA/60</th></tr>"+
+    (tg.units.map(u=>`<tr><td>${esc(u.line)}</td><td>${esc(u.players)}</td><td>${TOI(u.toi)}</td><td>${u.gf}</td><td>${u.ga}</td><td>${p60(u.gf,u.toi)}</td><td>${p60(u.ga,u.toi)}</td></tr>`).join("")
+     ||`<tr><td colspan="7" class="hint">no lines defined / no lineup data in filter</td></tr>`);
+  const focus=+$("#pairPlayer").value;
+  const pairs=focus?tg.pairs.filter(p=>p.ids.includes(focus)):tg.pairs.slice(0,30);
+  $("#pairsTbl").innerHTML="<tr><th>Pair</th><th>TOI together</th><th>GF</th><th>GA</th><th>GF/60</th><th>GA/60</th></tr>"+
+    (pairs.map(p=>`<tr><td>${esc(p.players)}</td><td>${TOI(p.toi)}</td><td>${p.gf}</td><td>${p.ga}</td><td>${p60(p.gf,p.toi)}</td><td>${p60(p.ga,p.toi)}</td></tr>`).join("")
+     ||`<tr><td colspan="6" class="hint">no lineup data</td></tr>`);
+  const xs=DASH.extras||[];
+  $("#extrasCard").hidden=!xs.length;
+  $("#extrasTbl").innerHTML="<tr><th>#</th><th>Player</th><th>FO taken</th><th>FO won</th><th>FO %</th><th>Entries</th><th>ctrl</th><th>Exits</th><th>ctrl</th></tr>"+
+    xs.map(r=>`<tr><td>${r.number??""}</td><td>${esc(r.name)}</td><td>${r.fo_t}</td><td>${r.fo_w}</td><td>${r.fo_pct}</td>
+      <td>${r.en}</td><td>${r.en_ctrl}</td><td>${r.ex}</td><td>${r.ex_ctrl}</td></tr>`).join("");
+  renderShifts();
   drawMaps();
 }
-["hTeam","hPlayer","hResult","hMode"].forEach(id=>$("#"+id).onchange=drawMaps);
+$("#pairPlayer").onchange=()=>DASH&&renderDash();
+function renderShifts(){
+  const sc=$("#shiftChart"), d=DASH.shifts;
+  const pids=d?Object.keys(d.by_player).map(Number):[];
+  if(!pids.length){
+    sc.setAttribute("viewBox","0 0 400 16");
+    sc.innerHTML=`<text x="4" y="11" style="font-size:8px;fill:var(--ink3)">select exactly one game (with line changes logged) in the filters to see the shift timeline</text>`;
+    return;
+  }
+  const pm=PBYID();
+  pids.sort((a,b)=>((pm[a]||{}).number??99)-((pm[b]||{}).number??99));
+  const W=1000,label=110,rowH=16,H=pids.length*rowH+26;
+  const xOf=t=>label+(W-label-8)*t/d.end;
+  const at=t=>{const p=Math.min(4,Math.floor(t/d.plen)+1);return `${p===4?"OT":"P"+p} ${mmss(d.plen-(t-(p-1)*d.plen))}`;};
+  let grid=`<text x="${label}" y="12" style="font-size:9px;fill:var(--ink3)">P1</text>`;
+  for(let k=1;k*d.plen<d.end;k++)
+    grid+=`<line x1="${xOf(k*d.plen)}" y1="16" x2="${xOf(k*d.plen)}" y2="${H-2}" stroke="var(--grid)"/>
+      <text x="${xOf(k*d.plen)+3}" y="12" style="font-size:9px;fill:var(--ink3)">${k===3?"OT":"P"+(k+1)}</text>`;
+  let rows="";
+  pids.forEach((pid,i)=>{
+    const y=20+i*rowH, p=pm[pid];
+    rows+=`<text x="4" y="${y+9}" style="font-size:10px;fill:var(--ink2)">${p?esc((p.number??"?")+" "+p.name.split(" ").pop()):pid}</text>`;
+    for(const [s,e] of d.by_player[pid])
+      rows+=`<rect x="${xOf(s)}" y="${y}" width="${Math.max(1.5,xOf(e)-xOf(s))}" height="10" rx="2" fill="var(--us)">
+        <title>${at(s)} → ${at(e)} · ${Math.round(e-s)} s</title></rect>`;
+  });
+  sc.setAttribute("viewBox",`0 0 ${W} ${H}`);
+  sc.innerHTML=grid+rows;
+}
+["hTeam","hPlayer","hResult","hMode","hDist"].forEach(id=>$("#"+id).onchange=drawMaps);
 const RESCOLOR={goal:"var(--goal)",on_goal:"var(--us)",missed:"var(--miss)",blocked:"var(--block)"};
 function drawMaps(){
   if(!DASH)return;
   const team=$("#hTeam").value, pid=+$("#hPlayer").value, res=$("#hResult").value, mode=$("#hMode").value;
-  const shots=DASH.shots.filter(s=>s.team===team&&(!pid||s.player_id===pid)&&(!res||s.result===res)&&s.x!=null);
+  const [dLo,dHi]=$("#hDist").value?$("#hDist").value.split("-").map(Number):[0,Infinity];
+  const shots=DASH.shots.filter(s=>s.team===team&&(!pid||s.player_id===pid)&&(!res||s.result===res)
+    &&s.x!=null&&s.dist_m>=dLo&&s.dist_m<dHi);
   const marks=shots.map(s=>{
-    const tip=`<title>${s.result==="goal"?"GOAL":s.result} · ${s.player_id?esc((PBYID()[s.player_id]||{}).name||""):"opponent"} · P${s.period} · ${s.state} · xG ${s.xg??"—"}</title>`;
+    const tip=`<title>${s.result==="goal"?"GOAL":s.result} · ${s.player_id?esc((PBYID()[s.player_id]||{}).name||""):"opponent"} · P${s.period} · ${s.state}${s.slot?" · slot":""} · ${s.dist_m} m · xG ${s.xg??"—"}${s.xgot?` · xGOT ${s.xgot}`:""}</title>`;
     if(mode==="density")
       return `<circle cx="${s.x}" cy="${s.y}" r="7" fill="${team==="us"?"var(--us)":"var(--opp)"}" opacity="0.16">${tip}</circle>`;
     const goal=s.result==="goal";
@@ -879,7 +1252,7 @@ function drawMaps(){
   const nets=shots.filter(s=>s.net_x!=null);
   $("#netmap").innerHTML=netSVG()+nets.map(s=>
     `<circle cx="${s.net_x*72/100}" cy="${s.net_y*48/100}" r="2.6" fill="${s.result==="goal"?"var(--goal)":"var(--us)"}">
-     <title>${s.result} · xG ${s.xg??"—"}</title></circle>`).join("")+
+     <title>${s.result==="goal"?"GOAL":"saved"} · xG ${s.xg??"—"}${s.xgot?` · xGOT ${s.xgot}`:""}</title></circle>`).join("")+
     (nets.length?"":`<text x="8" y="24" style="font-size:6px">no placement data in filter</text>`);
 }
 /* CSV export: any table -> download */
