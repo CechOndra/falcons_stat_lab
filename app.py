@@ -176,6 +176,56 @@ def game_flags():
     return out
 
 
+@app.get("/api/games/{game_id}/exports")
+def exports(game_id: int, pad: float = 3.0):
+    """Play segments (from clock history) + goal highlight windows, in video time.
+
+    Cuts: every clock start->stop pair, padded and merged. Highlights: 20 s
+    before each goal until the next clock start (celebration + replay end
+    exactly when play resumes), else goal + 40 s."""
+    con = db()
+    g = con.execute("SELECT * FROM games WHERE id=?", (game_id,)).fetchone()
+    if not g:
+        raise HTTPException(404)
+    evs = [dict(r) for r in con.execute(
+        "SELECT * FROM events WHERE game_id=? ORDER BY video_idx, video_ts, id", (game_id,))]
+    con.close()
+    cuts = {}
+    for idx in sorted({e["video_idx"] or 0 for e in evs}):
+        segs, open_s = [], None
+        for e in evs:
+            if (e["video_idx"] or 0) != idx or e["type"] != "clock":
+                continue
+            if e["detail"] == "start" and open_s is None:
+                open_s = e["video_ts"] or 0
+            elif e["detail"] == "stop" and open_s is not None:
+                if (e["video_ts"] or 0) > open_s:
+                    segs.append([open_s, e["video_ts"]])
+                open_s = None
+        if open_s is not None:
+            segs.append([open_s, None])  # clock still running: keep until end of file
+        padded = []
+        for s, e in segs:
+            s = max(0, s - pad)
+            e = None if e is None else e + pad
+            if padded and padded[-1][1] is not None and s <= padded[-1][1]:
+                padded[-1][1] = e
+            else:
+                padded.append([s, e])
+        if padded:
+            cuts[idx] = padded
+    clips = []
+    for gl in (e for e in evs if e["type"] == "shot" and e["result"] == "goal"):
+        idx, ts = gl["video_idx"] or 0, gl["video_ts"] or 0
+        nxt = next((e["video_ts"] for e in evs
+                    if (e["video_idx"] or 0) == idx and e["type"] == "clock"
+                    and e["detail"] == "start" and (e["video_ts"] or 0) > ts), None)
+        clips.append({"video_idx": idx, "team": gl["team"], "period": gl["period"],
+                      "clock": gl["clock"], "player_id": gl["player_id"],
+                      "start": max(0, ts - 20), "end": nxt if nxt is not None else ts + 40})
+    return {"files": json.loads(g["video_files"] or "[]"), "cuts": cuts, "clips": clips}
+
+
 @app.get("/api/me")
 def me():
     # ponytail: auth is phase 2; everyone is the seeded admin for now

@@ -149,6 +149,18 @@ a{color:var(--us)}
           <kbd>F</kbd> faceoff · <kbd>E</kbd>/<kbd>W</kbd> zone entry/exit · <kbd>N</kbd> quick marker
         </div>
       </div>
+      <div class="card">
+        <h3>Video exports <span class="hint">needs ffmpeg installed on this computer</span></h3>
+        <div class="row">
+          <select id="expOs"><option value="win">Windows (.bat)</option><option value="sh">macOS / Linux (.sh)</option></select>
+          <button id="expCut">⬇ Cut script (remove stoppages)</button>
+          <button id="expHl">⬇ Goal highlights script</button>
+        </div>
+        <div class="hint">Put the script next to the video file(s) and run it. Cuts follow your <kbd>K</kbd>/<kbd>Shift+K</kbd>
+          clock history with 3 s padding; highlight clips run from 20 s before each goal until play resumes, so the
+          replay is included. Stream-copy: fast and lossless, cut points snap to keyframes. Keep the original file —
+          logged events point at it, not at the cut version.</div>
+      </div>
     </div>
     <div>
       <div class="card">
@@ -749,7 +761,10 @@ function doCal(){
   const secs=parseClock($("#calTime").value);
   if(secs===null){$("#calTime").focus();return;}
   cal={period:+$("#calPeriod").value,clock:secs,videoT:video.currentTime,videoIdx:curIdx,running:true};
-  setCkState(); saveSession(); afterSave(dlgCal);
+  setCkState(); saveSession();
+  const s=snap();
+  if(s) postEvent(Object.assign({type:"clock",team:"us",detail:"start"},s)); // clock history begins here
+  afterSave(dlgCal);
 }
 wireEnter(dlgCal,doCal); $("#calSave").onclick=doCal;
 function toggleClock(){
@@ -1299,6 +1314,45 @@ function drawMaps(){
      <title>${s.result==="goal"?"GOAL":"saved"} · xG ${s.xg??"—"}${s.xgot?` · xGOT ${s.xgot}`:""}</title></circle>`).join("")+
     (nets.length?"":`<text x="8" y="24" style="font-size:6px">no placement data in filter</text>`);
 }
+/* ================= video export scripts (ffmpeg, run locally) ================= */
+function dlText(name,text){
+  const a=document.createElement("a");
+  a.href=URL.createObjectURL(new Blob([text],{type:"text/plain"}));
+  a.download=name; a.click(); URL.revokeObjectURL(a.href);
+}
+const srcName=i=>(JSON.parse(G.video_files||"[]")[i]||{}).name||vNames[i]||`video_${+i+1}.mp4`;
+$("#expCut").onclick=async()=>{
+  const ex=await api(`/games/${G.id}/exports`);
+  const idxs=Object.keys(ex.cuts);
+  if(!idxs.length){alert("No clock history yet. Calibrate (C) and use K / Shift+K while logging, then export.");return;}
+  const win=$("#expOs").value==="win", NL=win?"\r\n":"\n";
+  let out=win?"@echo off"+NL:"#!/bin/sh"+NL+"set -e"+NL;
+  for(const i of idxs){
+    const src=srcName(i), parts=[];
+    ex.cuts[i].forEach(([s,e],n)=>{
+      const p=`part_${i}_${String(n).padStart(3,"0")}.mp4`; parts.push(p);
+      out+=`ffmpeg -y ${s>0?`-ss ${s.toFixed(2)} `:""}${e!=null?`-to ${e.toFixed(2)} `:""}-i "${src}" -c copy "${p}"${NL}`;
+    });
+    const list=`list_${i}.txt`;
+    out+=parts.map((p,j)=>`echo file '${p}'${j?">>":">"}${list}`).join(NL)+NL;
+    out+=`ffmpeg -y -f concat -safe 0 -i ${list} -c copy "${src.replace(/\.[^.]+$/,"")}_cut.mp4"${NL}`;
+    out+=(win?"del ":"rm ")+list+" "+parts.map(p=>`"${p}"`).join(" ")+NL;
+  }
+  dlText(win?"cut_game.bat":"cut_game.sh",out);
+};
+$("#expHl").onclick=async()=>{
+  const ex=await api(`/games/${G.id}/exports`);
+  if(!ex.clips.length){alert("No goals logged yet.");return;}
+  const win=$("#expOs").value==="win", NL=win?"\r\n":"\n";
+  let out=win?"@echo off"+NL:"#!/bin/sh"+NL+"set -e"+NL;
+  ex.clips.forEach((c,n)=>{
+    const who=c.player_id?((PBYID()[c.player_id]||{}).name||"goal"):(c.team==="us"?"falcons":"opponent");
+    const name=`goal_${String(n+1).padStart(2,"0")}_P${c.period}_${who.replace(/[^\w]+/g,"_")}.mp4`;
+    out+=`ffmpeg -y -ss ${c.start.toFixed(2)} -to ${c.end.toFixed(2)} -i "${srcName(c.video_idx)}" -c copy "${name}"${NL}`;
+  });
+  dlText(win?"goal_highlights.bat":"goal_highlights.sh",out);
+};
+
 /* CSV export: any table -> download */
 $$("[data-csv]").forEach(b=>b.onclick=()=>{
   const rows=[...document.getElementById(b.dataset.csv).rows].map(r=>

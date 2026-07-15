@@ -316,12 +316,39 @@ quality primer (slot 10-15 %, perimeter 2-4 %), MetricGate xG methodology
 (logistic distance+angle form), Arctic Ice Hockey / The Point shot-target
 placement studies.
 
-## 5. Users & roles
+## 5. Cutting the video & goal highlights
+
+The clock history you produce with `C`, `K` and `Shift+K` doubles as a video
+cut list. In the Log tab, the **Video exports** card generates ffmpeg scripts
+(pick Windows `.bat` or macOS/Linux `.sh`):
+
+- **Cut script** — removes everything where the game clock was stopped
+  (intermissions, stoppages, delays), keeping 3 s of padding around each
+  play segment, and joins the rest into `<video>_cut.mp4`.
+- **Goal highlights script** — one clip per goal, from 20 s before the goal
+  until the moment play resumed (your next clock start), so the celebration
+  and the TV replay are included; if no resume was logged, 40 s after the
+  goal.
+
+Requirements and caveats:
+
+- **ffmpeg** must be installed (`winget install ffmpeg` on Windows,
+  `brew install ffmpeg` on macOS, `sudo apt install ffmpeg` on Linux).
+- Save the script **into the folder with the video file(s)** and run it. It
+  uses stream copy: fast (a 2 h game cuts in a couple of minutes), zero
+  quality loss, but cut points snap to the video's keyframes, so each edge
+  can be off by a second or two.
+- **Keep the original file.** Logged events point at timestamps in the
+  original; the cut file is for watching and sharing, not for logging.
+- The quality of the cuts equals the quality of your `K` discipline — if you
+  skipped marking some stoppages, that dead time simply stays in.
+
+## 6. Users & roles
 
 The schema already carries admin / coach / player roles for the future
 multi-user deployment; the local app runs as the seeded admin with no login.
 
-## 6. Tips for a smooth logging session
+## 7. Tips for a smooth logging session
 
 - Calibrate (`C`) at the start of each period, and any time you seek around.
 - Log the starting lineup (`L`) right after the opening face-off.
