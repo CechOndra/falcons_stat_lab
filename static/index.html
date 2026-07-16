@@ -149,6 +149,18 @@ a{color:var(--us)}
           <kbd>F</kbd> faceoff · <kbd>E</kbd>/<kbd>W</kbd> zone entry/exit · <kbd>N</kbd> quick marker
         </div>
       </div>
+      <div class="card">
+        <h3>Video exports <span class="hint">needs ffmpeg installed on this computer</span></h3>
+        <div class="row">
+          <select id="expOs"><option value="win">Windows (.bat)</option><option value="sh">macOS / Linux (.sh)</option></select>
+          <button id="expCut">⬇ Cut script (remove stoppages)</button>
+          <button id="expHl">⬇ Goal highlights script</button>
+        </div>
+        <div class="hint">Put the script next to the video file(s) and run it. Cuts follow your <kbd>K</kbd>/<kbd>Shift+K</kbd>
+          clock history with 3 s padding; highlight clips run from 20 s before each goal until play resumes, so the
+          replay is included. Stream-copy: fast and lossless, cut points snap to keyframes. Keep the original file —
+          logged events point at it, not at the cut version.</div>
+      </div>
     </div>
     <div>
       <div class="card">
@@ -263,6 +275,12 @@ a{color:var(--us)}
     <div class="tblwrap"><table id="keysTbl"></table></div>
     <div class="row"><button id="keysReset">Reset to defaults</button>
       <span class="hint" id="keysMsg">Click Rebind, then press the new key. Saved in this browser.</span></div>
+  </div>
+  <div class="card"><h2>Quick logging</h2>
+    <div class="hint">Ticked events save instantly as a stub when you press their key: no panel, video keeps playing,
+      and you fill the details later via ✎ in the event log. Hold <kbd>Shift</kbd> with the key to do the opposite of
+      the default. <kbd>Shift</kbd>+<kbd>K</kbd> stops the clock and drops a “whistle” marker in one press.</div>
+    <div class="row" id="quickList"></div>
   </div>
 </section>
 </main>
@@ -433,14 +451,14 @@ $("#tAdd").onclick = async()=>{if($("#tName").value.trim()){await api("/teams","
 /* ================= roster tab ================= */
 function renderRoster(){
   $("#rosterTbl").innerHTML = "<tr><th>#</th><th>Name</th><th>Pos</th><th>Photo</th><th>Active</th><th></th></tr>"+
-    PLAYERS.map(p=>`<tr>
+    (PLAYERS.map(p=>`<tr>
       <td><input class="num" type="number" value="${p.number??""}" data-pf="number" data-pid="${p.id}"></td>
       <td><input value="${esc(p.name)}" data-pf="name" data-pid="${p.id}"></td>
       <td><input size="2" value="${esc(p.position)}" data-pf="position" data-pid="${p.id}"></td>
       <td><input value="${esc(p.photo)}" data-pf="photo" data-pid="${p.id}" placeholder="URL"></td>
       <td><input type="checkbox" ${p.active?"checked":""} data-pf="active" data-pid="${p.id}"></td>
       <td><button class="ghost" data-del-p="${p.id}">✕</button></td></tr>`).join("")
-    ||`<tr><td colspan="6" class="hint">Roster is empty. Add players below or import a CSV.</td></tr>`;
+    ||`<tr><td colspan="6" class="hint">Roster is empty. Add players below or import a CSV.</td></tr>`);
   $$("[data-pf]").forEach(el=>el.onchange=async()=>{
     const v = el.type==="checkbox"?(el.checked?1:0):el.value;
     await api("/players/"+el.dataset.pid,"PUT",{[el.dataset.pf]:v});
@@ -461,8 +479,8 @@ $("#rCsvFile").onchange = async e=>{ if(e.target.files[0]) $("#rCsv").value = aw
 $("#rImport").onclick = async()=>{
   const r = await fetch("/api/roster_csv",{method:"POST",body:$("#rCsv").value});
   const j = await r.json();
+  await loadRefs(); // message only after everything refreshed
   $("#rImpMsg").textContent = `imported ${j.imported} players`; $("#rImpMsg").className="ok";
-  loadRefs();
 };
 
 /* ================= games tab ================= */
@@ -503,14 +521,14 @@ function renderGames(){
   const tmap = Object.fromEntries(TEAMS.map(t=>[t.id,t.name]));
   const smap = Object.fromEntries(SEASONS.map(s=>[s.id,s.name]));
   $("#gamesTbl").innerHTML = "<tr><th>Date</th><th>Season</th><th>Opponent</th><th>H/A</th><th>Score</th><th>Logged</th><th></th></tr>"+
-    GAMES.slice().reverse().map(g=>{const f=FLAGS[g.id],[badge,tip]=gradeOf(f);return `<tr>
+    (GAMES.slice().reverse().map(g=>{const f=FLAGS[g.id],[badge,tip]=gradeOf(f);return `<tr>
       <td>${esc(g.date)}</td><td>${esc(smap[g.season_id]??"")}</td><td>${esc(tmap[g.opponent_id]??"?")}</td>
       <td>${g.home?"H":"A"}</td><td>${g.score_us}:${g.score_opp}</td>
       <td title="${esc(tip)}">${badge} ${gameIcons(f)}</td>
       <td><button class="pri" data-open="${g.id}">Open / log</button>
           <button data-editg="${g.id}">Edit</button>
           <button class="ghost" data-delg="${g.id}">✕</button></td></tr>`;}).join("")
-    ||`<tr><td colspan="7" class="hint">No games yet. Create the first one above.</td></tr>`;
+    ||`<tr><td colspan="7" class="hint">No games yet. Create the first one above.</td></tr>`);
   $$("[data-open]").forEach(b=>b.onclick=()=>openGame(+b.dataset.open));
   $$("[data-delg]").forEach(b=>b.onclick=async()=>{
     if(confirm("Delete game AND all its events?")){
@@ -634,12 +652,13 @@ function evText(e){
     return `${e.type==="entry"?"Entry":"Exit"} ${e.detail==="controlled"?"ctrl":"dump"}${e.player_id?" · "+pname(e.player_id):""}`;
   return e.override;
 }
-const needsInfo = e => e.type==="marker" ||
+const needsInfo = e => (e.type==="marker" && e.note!=="whistle") ||
   (e.type==="shot" && (e.x==null || (e.team==="us" && !e.player_id)));
 function renderLog(){
-  let rows = EVS.slice().sort((a,b)=>elapsedOf(b)-elapsedOf(a)||b.id-a.id);
-  const todo = EVS.filter(needsInfo).length;
-  $("#evCount").textContent = `${EVS.length-todo}/${EVS.length} complete`;
+  const vis = EVS.filter(e=>e.type!=="clock"); // clock history is plumbing, not log content
+  let rows = vis.slice().sort((a,b)=>elapsedOf(b)-elapsedOf(a)||b.id-a.id);
+  const todo = vis.filter(needsInfo).length;
+  $("#evCount").textContent = `${vis.length-todo}/${vis.length} complete`;
   if($("#evFilter").value==="todo") rows = rows.filter(needsInfo);
   $("#evTbl").innerHTML = "<tr><th>Time</th><th>Event</th><th></th></tr>"+rows.map(e=>
     `<tr data-ev="${e.id}"><td>${e.period===4?"OT":"P"+e.period} ${mmss(e.clock)}</td>
@@ -742,7 +761,10 @@ function doCal(){
   const secs=parseClock($("#calTime").value);
   if(secs===null){$("#calTime").focus();return;}
   cal={period:+$("#calPeriod").value,clock:secs,videoT:video.currentTime,videoIdx:curIdx,running:true};
-  setCkState(); saveSession(); afterSave(dlgCal);
+  setCkState(); saveSession();
+  const s=snap();
+  if(s) postEvent(Object.assign({type:"clock",team:"us",detail:"start"},s)); // clock history begins here
+  afterSave(dlgCal);
 }
 wireEnter(dlgCal,doCal); $("#calSave").onclick=doCal;
 function toggleClock(){
@@ -750,6 +772,9 @@ function toggleClock(){
   if(cal.running){cal.clock=gameClock();cal.running=false;}
   else{cal.videoT=video.currentTime;cal.videoIdx=curIdx;cal.running=true;}
   setCkState(); saveSession();
+  // invisible clock history: powers future video cutting / highlight windows
+  const s=snap();
+  if(s) postEvent(Object.assign({type:"clock",team:"us",detail:cal.running?"start":"stop"},s));
 }
 
 /* ================= shot dialog ================= */
@@ -1031,9 +1056,24 @@ wireEnter(dlgZone,()=>save1(saveZone)); $("#znSave").onclick=()=>save1(saveZone)
 /* ================= quick marker (fill in later) ================= */
 const dlgMark=$("#dlgMark");
 let markEv=null;
-async function quickMarker(){ // no dialog, no pause: just stamp the moment
+async function quickMarker(note=""){ // no dialog, no pause: just stamp the moment
   const s=snap(); if(!s)return;
-  await postEvent(Object.assign({type:"marker",team:"us",note:""},s));
+  await postEvent(Object.assign({type:"marker",team:"us",note},s));
+}
+/* quick-stamp: typed stub with no panel; edit later opens the right dialog */
+const QUICKABLE={shotUs:"Shot us",shotOpp:"Shot opp",goalUs:"Goal us",goalOpp:"Goal opp",
+  penUs:"Penalty us",penOpp:"Penalty opp",faceoff:"Faceoff",entry:"Entry",exit:"Exit"};
+const quickDefaults=()=>JSON.parse(localStorage.getItem("falcQuick")||"{}");
+async function quickStamp(id){
+  const s=snap(); if(!s)return;
+  await postEvent(Object.assign({type:"marker",team:"us",note:QUICKABLE[id],detail:id},s));
+}
+function openKind(id,ev){
+  const map={shotUs:()=>openShot("us",false,ev),shotOpp:()=>openShot("opp",false,ev),
+    goalUs:()=>openShot("us",true,ev),goalOpp:()=>openShot("opp",true,ev),
+    penUs:()=>openPen("us",ev),penOpp:()=>openPen("opp",ev),
+    faceoff:()=>openFo(ev),entry:()=>openZone("entry",ev),exit:()=>openZone("exit",ev)};
+  map[id]();
 }
 function openMark(ev){
   markEv=ev; editingId=ev.id;
@@ -1065,7 +1105,7 @@ function editEvent(id){
   if(e.type==="shot")openShot(e.team,e.result==="goal",e);
   else if(e.type==="penalty")openPen(e.team,e);
   else if(e.type==="lineup")openLineup(e);
-  else if(e.type==="marker")openMark(e);
+  else if(e.type==="marker")QUICKABLE[e.detail]?openKind(e.detail,e):openMark(e);
   else if(e.type==="faceoff")openFo(e);
   else if(e.type==="entry"||e.type==="exit")openZone(e.type,e);
   else openOvr(e);
@@ -1077,21 +1117,30 @@ document.addEventListener("keydown",e=>{
   if(e.target.closest("input,select,textarea,button"))return;
   if(!$("#tab-log").classList.contains("on")||!G)return;
   const k=e.key.length===1?e.key.toLowerCase():e.key;
-  const acts={
-    [KEYS.playPause]:()=>video.paused?video.play():video.pause(),
-    [KEYS.back]:()=>video.currentTime-= e.shiftKey?1:5,
-    [KEYS.fwd]:()=>video.currentTime+= e.shiftKey?1:5,
-    [KEYS.slower]:()=>video.playbackRate=Math.max(.25,video.playbackRate-.25),
-    [KEYS.faster]:()=>video.playbackRate=Math.min(4,video.playbackRate+.25),
-    [KEYS.calibrate]:openCal, [KEYS.clock]:toggleClock,
-    [KEYS.shotUs]:()=>openShot("us",false), [KEYS.shotOpp]:()=>openShot("opp",false),
-    [KEYS.goalUs]:()=>openShot("us",true), [KEYS.goalOpp]:()=>openShot("opp",true),
-    [KEYS.penUs]:()=>openPen("us"), [KEYS.penOpp]:()=>openPen("opp"),
-    [KEYS.lineup]:()=>openLineup(), [KEYS.override]:()=>openOvr(),
-    [KEYS.marker]:quickMarker,
-    [KEYS.faceoff]:()=>openFo(), [KEYS.entry]:()=>openZone("entry"), [KEYS.exit]:()=>openZone("exit"),
+  const id=Object.keys(KEYS).find(a=>KEYS[a]===k);
+  if(!id)return;
+  e.preventDefault();
+  const media={
+    playPause:()=>video.paused?video.play():video.pause(),
+    back:()=>video.currentTime-= e.shiftKey?1:5,
+    fwd:()=>video.currentTime+= e.shiftKey?1:5,
+    slower:()=>video.playbackRate=Math.max(.25,video.playbackRate-.25),
+    faster:()=>video.playbackRate=Math.min(4,video.playbackRate+.25),
   };
-  if(acts[k]){e.preventDefault();acts[k]();}
+  if(media[id])return media[id]();
+  if(id==="clock"){
+    if(e.shiftKey&&cal&&cal.running){toggleClock();quickMarker("whistle");return;} // whistle in one press
+    return toggleClock();
+  }
+  // quick-by-default types stamp a stub; Shift inverts (stub<->panel)
+  if(QUICKABLE[id] && (!!quickDefaults()[id] !== e.shiftKey))return quickStamp(id);
+  const dialogActs={calibrate:openCal, lineup:()=>openLineup(), override:()=>openOvr(),
+    marker:()=>quickMarker(),
+    shotUs:()=>openShot("us",false), shotOpp:()=>openShot("opp",false),
+    goalUs:()=>openShot("us",true), goalOpp:()=>openShot("opp",true),
+    penUs:()=>openPen("us"), penOpp:()=>openPen("opp"),
+    faceoff:()=>openFo(), entry:()=>openZone("entry"), exit:()=>openZone("exit")};
+  dialogActs[id]();
 });
 $$("dialog").forEach(d=>d.addEventListener("close",()=>{
   // close events fire async: keep editingId when another dialog already took over (marker conversion)
@@ -1121,6 +1170,16 @@ function renderKeys(){
       $("#keysMsg").textContent="Saved."; renderKeys();
     };
     document.addEventListener("keydown",grab,true);
+  });
+  renderQuick();
+}
+function renderQuick(){
+  const q=quickDefaults();
+  $("#quickList").innerHTML=Object.entries(QUICKABLE).map(([id,label])=>
+    `<label><input type="checkbox" data-quick="${id}" ${q[id]?"checked":""}> ${label} <kbd>${prettyKey(KEYS[id])}</kbd></label>`).join("");
+  $$("[data-quick]").forEach(c=>c.onchange=()=>{
+    const q2=quickDefaults(); q2[c.dataset.quick]=c.checked;
+    localStorage.setItem("falcQuick",JSON.stringify(q2));
   });
 }
 $("#keysReset").onclick=()=>{
@@ -1180,11 +1239,11 @@ function renderDash(){
     <span><span class="bar" title="SOG against P${p}: ${d.sa}" style="width:${d.sa/mx*90}%;background:var(--opp)"></span><span class="bnum">${d.sa}</span></span></div>`;}).join("")
     ||`<div class="hint">no shots in the current filter</div>`;
   $("#playersTbl").innerHTML=`<tr><th>#</th><th>Player</th><th>GP</th><th>G</th><th>A</th><th>P</th><th>SOG</th><th>Att</th><th>Sh%</th><th>xG</th><th>xGOT</th><th>Blk</th><th>Pen</th><th>PIM</th><th>Scr</th><th>TOI</th><th>5v5</th><th>PP</th><th>PK</th><th>P/60</th><th>S/60 5v5</th><th>SF on</th><th>SA on</th><th>GF on</th><th>GA on</th></tr>`+
-    DASH.players.map(p=>`<tr><td>${p.number??""}</td><td>${esc(p.name)}</td><td>${p.gp}</td><td>${p.g}</td><td>${p.a}</td><td><b>${p.p}</b></td>
+    (DASH.players.map(p=>`<tr><td>${p.number??""}</td><td>${esc(p.name)}</td><td>${p.gp}</td><td>${p.g}</td><td>${p.a}</td><td><b>${p.p}</b></td>
       <td>${p.sog}</td><td>${p.att}</td><td>${p.sh_pct}</td><td>${p.xg}</td><td>${p.xgot}</td><td>${p.blk}</td><td>${p.pen}</td><td>${p.pim}</td><td>${p.screens}</td>
       <td>${TOI(p.toi)}</td><td>${TOI(p.toi_5v5)}</td><td>${TOI(p.toi_pp)}</td><td>${TOI(p.toi_pk)}</td>
       <td>${p.p60}</td><td>${p.s60_5v5}</td><td>${p.sf_on}</td><td>${p.sa_on}</td><td>${p.gf_on}</td><td>${p.ga_on}</td></tr>`).join("")
-    ||`<tr><td colspan="25" class="hint">No data in the current filter.</td></tr>`;
+    ||`<tr><td colspan="25" class="hint">No data in the current filter.</td></tr>`);
   const tg=DASH.together||{units:[],pairs:[]};
   const p60=(n,toi)=>toi?(n*3600/toi).toFixed(2):"0";
   $("#unitsTbl").innerHTML="<tr><th>Line</th><th>Players</th><th>TOI together</th><th>GF</th><th>GA</th><th>GF/60</th><th>GA/60</th></tr>"+
@@ -1255,6 +1314,45 @@ function drawMaps(){
      <title>${s.result==="goal"?"GOAL":"saved"} · xG ${s.xg??"—"}${s.xgot?` · xGOT ${s.xgot}`:""}</title></circle>`).join("")+
     (nets.length?"":`<text x="8" y="24" style="font-size:6px">no placement data in filter</text>`);
 }
+/* ================= video export scripts (ffmpeg, run locally) ================= */
+function dlText(name,text){
+  const a=document.createElement("a");
+  a.href=URL.createObjectURL(new Blob([text],{type:"text/plain"}));
+  a.download=name; a.click(); URL.revokeObjectURL(a.href);
+}
+const srcName=i=>(JSON.parse(G.video_files||"[]")[i]||{}).name||vNames[i]||`video_${+i+1}.mp4`;
+$("#expCut").onclick=async()=>{
+  const ex=await api(`/games/${G.id}/exports`);
+  const idxs=Object.keys(ex.cuts);
+  if(!idxs.length){alert("No clock history yet. Calibrate (C) and use K / Shift+K while logging, then export.");return;}
+  const win=$("#expOs").value==="win", NL=win?"\r\n":"\n";
+  let out=win?"@echo off"+NL:"#!/bin/sh"+NL+"set -e"+NL;
+  for(const i of idxs){
+    const src=srcName(i), parts=[];
+    ex.cuts[i].forEach(([s,e],n)=>{
+      const p=`part_${i}_${String(n).padStart(3,"0")}.mp4`; parts.push(p);
+      out+=`ffmpeg -y ${s>0?`-ss ${s.toFixed(2)} `:""}${e!=null?`-to ${e.toFixed(2)} `:""}-i "${src}" -c copy "${p}"${NL}`;
+    });
+    const list=`list_${i}.txt`;
+    out+=parts.map((p,j)=>`echo file '${p}'${j?">>":">"}${list}`).join(NL)+NL;
+    out+=`ffmpeg -y -f concat -safe 0 -i ${list} -c copy "${src.replace(/\.[^.]+$/,"")}_cut.mp4"${NL}`;
+    out+=(win?"del ":"rm ")+list+" "+parts.map(p=>`"${p}"`).join(" ")+NL;
+  }
+  dlText(win?"cut_game.bat":"cut_game.sh",out);
+};
+$("#expHl").onclick=async()=>{
+  const ex=await api(`/games/${G.id}/exports`);
+  if(!ex.clips.length){alert("No goals logged yet.");return;}
+  const win=$("#expOs").value==="win", NL=win?"\r\n":"\n";
+  let out=win?"@echo off"+NL:"#!/bin/sh"+NL+"set -e"+NL;
+  ex.clips.forEach((c,n)=>{
+    const who=c.player_id?((PBYID()[c.player_id]||{}).name||"goal"):(c.team==="us"?"falcons":"opponent");
+    const name=`goal_${String(n+1).padStart(2,"0")}_P${c.period}_${who.replace(/[^\w]+/g,"_")}.mp4`;
+    out+=`ffmpeg -y -ss ${c.start.toFixed(2)} -to ${c.end.toFixed(2)} -i "${srcName(c.video_idx)}" -c copy "${name}"${NL}`;
+  });
+  dlText(win?"goal_highlights.bat":"goal_highlights.sh",out);
+};
+
 /* CSV export: any table -> download */
 $$("[data-csv]").forEach(b=>b.onclick=()=>{
   const rows=[...document.getElementById(b.dataset.csv).rows].map(r=>

@@ -7,12 +7,15 @@ get team/player stats, shot heat maps, TOI, PP/PK and xG.
 ## Run
 
 ```
+python -m venv .venv
+.venv\Scripts\activate        # Windows · macOS/Linux: source .venv/bin/activate
 pip install -r requirements.txt
 python app.py
 ```
 
 → http://localhost:8000 — data lives in `falcons.db` (SQLite, copy = backup).
-Videos are opened straight from disk, never uploaded.
+Videos are opened straight from disk, never uploaded. In every new terminal,
+activate the venv again (second line) before `python app.py`.
 
 ## Docs
 

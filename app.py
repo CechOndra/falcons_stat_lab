@@ -47,7 +47,7 @@ CREATE TABLE IF NOT EXISTS events(
   id INTEGER PRIMARY KEY,
   game_id INTEGER NOT NULL REFERENCES games(id),
   type TEXT NOT NULL CHECK(type IN ('shot','penalty','lineup','override','marker',
-                                    'faceoff','entry','exit')),
+                                    'faceoff','entry','exit','clock')),
   team TEXT DEFAULT 'us' CHECK(team IN ('us','opp')),
   period INTEGER NOT NULL,
   clock INTEGER NOT NULL,        -- seconds REMAINING in the period, as on the scoreboard
@@ -61,7 +61,7 @@ CREATE TABLE IF NOT EXISTS events(
   on_ice TEXT,                   -- ponytail: JSON player-id list; join table if per-player SQL ever needed
   override TEXT,                 -- '5v5'|'pp'|'pk'|'auto' manual game-state override
   note TEXT DEFAULT '',          -- free text; markers use it ("faceoff", "check this")
-  detail TEXT,                   -- entry/exit: 'controlled'|'uncontrolled'
+  detail TEXT,                   -- entry/exit: 'controlled'|'uncontrolled'; clock: 'start'|'stop'; marker: quick-stamp kind
   created_at TEXT DEFAULT (datetime('now')));
 CREATE INDEX IF NOT EXISTS ev_game ON events(game_id);
 """
@@ -97,7 +97,7 @@ def seed():
     except sqlite3.OperationalError:
         pass
     row = con.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='events'").fetchone()
-    if row and "'faceoff'" not in row["sql"]:  # rebuild events for newer event types/columns
+    if row and "'clock'" not in row["sql"]:  # rebuild events for newer event types/columns
         con.execute("PRAGMA foreign_keys=OFF")
         con.executescript("ALTER TABLE events RENAME TO events_old;" + SCHEMA)
         cols = ",".join(r[1] for r in con.execute("PRAGMA table_info(events_old)"))
@@ -167,12 +167,63 @@ def game_flags():
     for r in con.execute("SELECT game_id, type, COUNT(*) n FROM events GROUP BY game_id, type"):
         out.setdefault(r["game_id"], {})[r["type"]] = r["n"]
     for r in con.execute("""SELECT game_id, COUNT(*) n FROM events
-                            WHERE type='marker' OR (type='shot' AND
+                            WHERE (type='marker' AND IFNULL(note,'') != 'whistle')
+                               OR (type='shot' AND
                               (x IS NULL OR (team='us' AND player_id IS NULL)))
                             GROUP BY game_id"""):
         out.setdefault(r["game_id"], {})["todo"] = r["n"]
     con.close()
     return out
+
+
+@app.get("/api/games/{game_id}/exports")
+def exports(game_id: int, pad: float = 3.0):
+    """Play segments (from clock history) + goal highlight windows, in video time.
+
+    Cuts: every clock start->stop pair, padded and merged. Highlights: 20 s
+    before each goal until the next clock start (celebration + replay end
+    exactly when play resumes), else goal + 40 s."""
+    con = db()
+    g = con.execute("SELECT * FROM games WHERE id=?", (game_id,)).fetchone()
+    if not g:
+        raise HTTPException(404)
+    evs = [dict(r) for r in con.execute(
+        "SELECT * FROM events WHERE game_id=? ORDER BY video_idx, video_ts, id", (game_id,))]
+    con.close()
+    cuts = {}
+    for idx in sorted({e["video_idx"] or 0 for e in evs}):
+        segs, open_s = [], None
+        for e in evs:
+            if (e["video_idx"] or 0) != idx or e["type"] != "clock":
+                continue
+            if e["detail"] == "start" and open_s is None:
+                open_s = e["video_ts"] or 0
+            elif e["detail"] == "stop" and open_s is not None:
+                if (e["video_ts"] or 0) > open_s:
+                    segs.append([open_s, e["video_ts"]])
+                open_s = None
+        if open_s is not None:
+            segs.append([open_s, None])  # clock still running: keep until end of file
+        padded = []
+        for s, e in segs:
+            s = max(0, s - pad)
+            e = None if e is None else e + pad
+            if padded and padded[-1][1] is not None and s <= padded[-1][1]:
+                padded[-1][1] = e
+            else:
+                padded.append([s, e])
+        if padded:
+            cuts[idx] = padded
+    clips = []
+    for gl in (e for e in evs if e["type"] == "shot" and e["result"] == "goal"):
+        idx, ts = gl["video_idx"] or 0, gl["video_ts"] or 0
+        nxt = next((e["video_ts"] for e in evs
+                    if (e["video_idx"] or 0) == idx and e["type"] == "clock"
+                    and e["detail"] == "start" and (e["video_ts"] or 0) > ts), None)
+        clips.append({"video_idx": idx, "team": gl["team"], "period": gl["period"],
+                      "clock": gl["clock"], "player_id": gl["player_id"],
+                      "start": max(0, ts - 20), "end": nxt if nxt is not None else ts + 40})
+    return {"files": json.loads(g["video_files"] or "[]"), "cuts": cuts, "clips": clips}
 
 
 @app.get("/api/me")

@@ -141,6 +141,15 @@ def main():
     assert sx["shifts"] and sx["shifts"]["by_player"][str(a)] == [[0, 3600]]
     assert sx["shifts"]["by_player"][str(b)] == [[0, 200]]
     assert all("ids" in p for p in sx["together"]["pairs"])
+
+    # clock history + quick-stamp stubs: stored, stats-neutral
+    ev(g1, "clock", "us", 1190, detail="stop")
+    stub = ev(g1, "marker", "us", 1180, note="Faceoff", detail="faceoff")
+    s4 = client.get(f"/api/stats?game_ids={g1}").json()["team"]
+    assert (s4["sog_f"], s4["fo_w"]) == (3, 1)  # neither event counts anywhere
+    assert stub["detail"] == "faceoff"
+    for eid in (stub["id"],):
+        client.delete(f"/api/events/{eid}")
     flags = client.get("/api/game_flags").json()[str(g1)]
     assert flags["shot"] == 5 and flags["lineup"] == 2 and flags["faceoff"] == 2
     assert flags["entry"] == 2 and flags["exit"] == 1 and "todo" not in flags
@@ -155,6 +164,28 @@ def main():
     states = {(sh["result"], sh["state"]) for sh in s2["shots"]}
     assert ("goal", "pk") in states and ("on_goal", "5v5") in states
     assert client.get("/api/stats").json()["shifts"] is None  # multi-game: no shift chart
+
+    # --- game 3: video export windows from clock history ---
+    g3 = post("/api/games", {"opponent_id": opp["id"], "period_len": 1200,
+                             "video_files": '[{"name":"p1.mp4","period":1}]'})["id"]
+
+    def cev(clock, ts, det):
+        return post("/api/events", dict(game_id=g3, type="clock", team="us",
+                                        period=1, clock=clock, video_ts=ts,
+                                        video_idx=0, detail=det))
+    cev(1200, 10, "start"); cev(1100, 70, "stop")
+    cev(1000, 100, "start"); cev(900, 160, "stop")
+    post("/api/events", dict(game_id=g3, type="shot", team="us", period=1, clock=1080,
+                             video_ts=80, video_idx=0, x=175, y=42, result="goal"))
+    post("/api/events", dict(game_id=g3, type="shot", team="us", period=1, clock=950,
+                             video_ts=120, video_idx=0, x=175, y=42, result="goal"))
+    ex = client.get(f"/api/games/{g3}/exports?pad=3").json()
+    assert ex["cuts"]["0"] == [[7, 73], [97, 163]]
+    # goal during a stoppage: clip ends when play resumes (replay included)
+    assert (ex["clips"][0]["start"], ex["clips"][0]["end"]) == (60, 100)
+    # goal with no later clock start: fixed 40 s tail
+    assert (ex["clips"][1]["start"], ex["clips"][1]["end"]) == (100, 160)
+    assert client.get("/api/games/99999/exports").status_code == 404
 
     # xG calibrated to published NHL anchors: crease ~.20, slot ~.10, point ~.02
     assert 0.17 < appmod.xg_value(181, 42.5) < 0.24

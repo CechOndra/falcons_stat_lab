@@ -2,3 +2,4 @@ __pycache__/
 *.pyc
 falcons.db
 nohup.out
+.venv/
